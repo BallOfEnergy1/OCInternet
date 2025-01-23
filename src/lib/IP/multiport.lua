@@ -1,28 +1,60 @@
-local component = require("component")
+local event = require("event")
+local packetFrag = require("IP/packetFrag").fragmentation
 local serialization = require("serialization")
-local modem = component.modem
 
 local multiport  = {}
 local multiportPort = 500
 
 function multiport.send(packet, skipRegister)
   if(not skipRegister) then
-    require("IP/protocols/DHCP").registerIfNeeded()
+    require("IP/protocols/DHCP").dhcp.registerIfNeeded()
   end
-  multiport.getModem().send(packet.targetMAC, multiportPort, serialization.serialize(packet))
+  packetFrag.send(packet.targetMAC, multiportPort, packet)
 end
 
 function multiport.broadcast(packet, skipRegister)
   packet.targetMAC = nil
   packet.targetIP = require("IP/IPUtil").util.fromUserFormat("FFFF:FFFF:FFFF:FFFF")
   if(not skipRegister) then
-    require("IP/protocols/DHCP").registerIfNeeded()
+    require("IP/protocols/DHCP").dhcp.registerIfNeeded()
   end
-  multiport.getModem().broadcast(multiportPort, serialization.serialize(packet))
+  packetFrag.broadcast(multiportPort, packet)
 end
 
-function multiport.getModem()
-  return modem
+function multiport.requestMessageWithTimeout(packet, skipRegister, broadcast, timeout, attempts, eventCondition)
+  local tries = 1
+  ::start::
+  if(broadcast) then
+    multiport.broadcast(packet, skipRegister)
+  else
+    multiport.send(packet, skipRegister)
+  end
+  ::wait::
+  local a, b, c, d, e, f = event.pull(timeout, "multiport_message")
+  if(a == nil) then
+    tries = tries + 1
+    if(tries > attempts) then
+      return nil
+    end
+    goto start
+  end
+  if(eventCondition(a, b, c, d, e, f)) then
+    return f
+  else
+    goto wait
+  end
 end
 
-return {multiport = multiport, multiportPort = multiportPort}
+local function process(_, b, c, targetPort, d, message)
+  if(targetPort == require("IP/multiport").multiportPort) then
+    local decodedPacket = serialization.unserialize(message)
+    event.push("multiport_message", b, c, decodedPacket.targetPort, d, message)
+  end
+end
+
+local function setup()
+  local component = require("component")
+  component.modem.open(multiportPort)
+end
+
+return {process = process, setup = setup, multiport = multiport, multiportPort = multiportPort}

@@ -23,25 +23,27 @@ local function onDHCPMessage(receivedPacket)
   local IP
   _G.IP.logger.write("#[DHCPServer] Recieved DHCP request from '" .. receivedPacket.senderMAC .. "'.")
   IP = _G.DHCP.allRegisteredMACs[receivedPacket.senderMAC]
+  local skipIP = false
   if(IP ~= nil) then
-    goto DHCPEndPostIP
+    skipIP = true
   end
   for MAC, reservedIP in pairs(_G.DHCP.userReservedIPs) do
     if(MAC == receivedPacket.senderMAC) then
       IP = reservedIP
-      goto DHCPEndPostIP
+      skipIP = true
     end
   end
-  ::DHCPStart::
-  _G.DHCP.IPIndex = _G.DHCP.IPIndex + 1
-  if(tableUtil.tableContainsItem(_G.DHCP.systemReservedIPs, _G.DHCP.IPIndex)) then
-    goto DHCPStart
+  if(skipIP) then
+    ::DHCPStart::
+    _G.DHCP.IPIndex = _G.DHCP.IPIndex + 1
+    if(tableUtil.tableContainsItem(_G.DHCP.systemReservedIPs, _G.DHCP.IPIndex)) then
+      goto DHCPStart
+    end
+    if(tableUtil.tableContainsItem(_G.DHCP.userReservedIPs, _G.DHCP.IPIndex)) then
+      goto DHCPStart
+    end
+    IP = util.createIP(_G.DHCP.subnetIdentifier, _G.DHCP.IPIndex)
   end
-  if(tableUtil.tableContainsItem(_G.DHCP.userReservedIPs, _G.DHCP.IPIndex)) then
-    goto DHCPStart
-  end
-  IP = util.createIP(_G.DHCP.subnetIdentifier, _G.DHCP.IPIndex)
-  ::DHCPEndPostIP::
   multiport.send(packet.constructWithKnownMAC(receivedPacket.senderMAC, 0, dhcpClientPort, {
   registeredIP = IP,
   subnetMask = _G.DHCP.providedSubnetMask,
@@ -58,9 +60,9 @@ function dhcpServer.removeReservedIP(MAC)
   _G.DHCP.userReservedIPs[MAC] = nil
 end
 
-function dhcpServer.setup()
+local function setup()
   DHCP.setup()
-  local _, success = pcall(DHCP.registerIfNeeded)
+  local success = pcall(DHCP.dhcp.registerIfNeeded)
   if(not success) then
     _G.IP.logger.write("#[DHCPServer] No DHCP servers found on this network.")
   end
@@ -74,11 +76,11 @@ function dhcpServer.setup()
     1,
     0xFFFFFFFFFF  -- IP #0, #1, and the last IP in the system.
   }
-  event.listen("modem_message", function(_, _, _, targetPort, _, message)
+  event.listen("multiport_message", function(_, _, _, targetPort, _, message)
     if(targetPort == dhcpServerPort) then
       onDHCPMessage(serialization.unserialize(message))
     end
   end)
 end
 
-return dhcpServer
+return {dhcpServer = dhcpServer, setup = setup}

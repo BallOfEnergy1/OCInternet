@@ -1,15 +1,6 @@
 local util = {}
 
-local serialization = require("serialization")
-local event = require("event")
 local logutil = require("logutil")
-
-local function process(_, b, c, targetPort, d, message)
-  if(targetPort == require("IP/multiport").multiportPort) then
-    local decodedPacket = serialization.unserialize(message)
-    event.push("modem_message", b, c, decodedPacket.targetPort, d, message)
-  end
-end
 
 function util.toHex(dec)
   local output = string.format("%x", dec)
@@ -68,6 +59,7 @@ function util.getID(IP)
 end
 
 local function setup()
+  require("filesystem").makeDirectory("/var/ip") -- TODO get rid of this bs
   if(not _G.IP or not _G.IP.isInitialized) then
     _G.IP = {}
     do
@@ -84,10 +76,10 @@ local function setup()
       _G.IP.clientIP       = util.fromUserFormat("0123:4567:89ab:cdef")
       _G.IP.subnetMask     = util.fromUserFormat("FFFF:FF00:0000:0000")
       _G.IP.defaultGateway = util.fromUserFormat("0123:4500:0000:0001")
+      _G.IP.MAC            = require("component").modem.address
     end
-    require("filesystem").makeDirectory("/var/ip") -- TODO get rid of this bs
-    require("IP/multiport").multiport.getModem().open(require("IP/multiport").multiportPort)
-    event.listen("modem_message", process)
+    require("IP/packetFrag").setup()
+    require("IP/multiport").setup()
     _G.IP.isInitialized = true
   end
 end
