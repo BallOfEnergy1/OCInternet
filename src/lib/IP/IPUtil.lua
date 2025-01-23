@@ -32,19 +32,6 @@ function util.fromUserFormat(IP)
   return parsedIP
 end
 
-local function getSubnetShiftFactor()
-  local dec = ~(_G.IP.subnetMask)
-  local mask = 1
-  local shiftFactor = 0
-  for _ = 0, 31 do
-    if(dec & mask) then
-      shiftFactor = shiftFactor + 1
-    end
-    mask = mask << 1
-  end
-  return shiftFactor
-end
-
 -- Takes in dec representations!
 function util.createIP(subnet, ID)
   return subnet | ID
