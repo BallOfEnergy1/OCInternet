@@ -1,39 +1,37 @@
-local DHCP = require("IP/protocols/DHCP")
-local util = require("IP/IPUtil").util
-local packet = require("IP/packetUtil")
-local multiport = require("IP/multiport").multiport
+local DHCP = require("IP.protocols.DHCP")
+local util = require("IP.IPUtil").util
+local packet = require("IP.packetUtil")
+local multiport = require("IP.multiport").multiport
 local serialization = require("serialization")
 local event = require("event")
 local tableUtil = require("tableutil")
 
 local dhcpServerPort = 27
 local dhcpClientPort = 26
+local dhcpProtocol = 3
 
 local dhcpServer = {}
 
 function dhcpServer.flushAllAndNotify() -- This is to prevent the IP space from getting very full. Run this occasionally and clients will not be affected (too much).
   for i, v in pairs(_G.DHCP.allRegisteredMACs) do
-    multiport.send(packet.constructWithKnownMAC(i, v, dhcpClientPort, 0x11)) -- Notify clients to renew their DHCP IP.
+    multiport.send(packet.constructWithKnownMAC(dhcpProtocol, i, v, dhcpClientPort, 0x11)) -- Notify clients to renew their DHCP IP.
   end
   _G.DHCP.allRegisteredMACs = {}
   _G.DHCP.IPIndex = 0
 end
 
 local function onDHCPMessage(receivedPacket)
-  local IP
   _G.IP.logger.write("#[DHCPServer] Recieved DHCP request from '" .. receivedPacket.senderMAC .. "'.")
-  IP = _G.DHCP.allRegisteredMACs[receivedPacket.senderMAC]
-  local skipIP = false
-  if(IP ~= nil) then
-    skipIP = true
+  local IP
+  if(_G.DHCP.allRegisteredMACs[receivedPacket.senderMAC] ~= nil) then
+    IP = _G.DHCP.allRegisteredMACs[receivedPacket.senderMAC]
   end
   for MAC, reservedIP in pairs(_G.DHCP.userReservedIPs) do
-    if(MAC == receivedPacket.senderMAC) then
+    if(MAC == receivedPacket.senderMAC and reservedIP ~= nil) then
       IP = reservedIP
-      skipIP = true
     end
   end
-  if(skipIP) then
+  if(IP == nil) then
     ::DHCPStart::
     _G.DHCP.IPIndex = _G.DHCP.IPIndex + 1
     if(tableUtil.tableContainsItem(_G.DHCP.systemReservedIPs, _G.DHCP.IPIndex)) then
@@ -44,7 +42,8 @@ local function onDHCPMessage(receivedPacket)
     end
     IP = util.createIP(_G.DHCP.subnetIdentifier, _G.DHCP.IPIndex)
   end
-  multiport.send(packet.constructWithKnownMAC(receivedPacket.senderMAC, 0, dhcpClientPort, {
+  _G.IP.logger.write("#[DHCPServer] Sending IP '" .. IP .. "' to client.")
+  multiport.send(packet.constructWithKnownMAC(dhcpProtocol, receivedPacket.senderMAC, 0, dhcpClientPort, {
   registeredIP = IP,
   subnetMask = _G.DHCP.providedSubnetMask,
   defaultGateway = _G.IP.defaultGateway
@@ -60,9 +59,9 @@ function dhcpServer.removeReservedIP(MAC)
   _G.DHCP.userReservedIPs[MAC] = nil
 end
 
-local function setup()
+function dhcpServer.setup()
   DHCP.setup()
-  local success = pcall(DHCP.dhcp.registerIfNeeded)
+  local success = pcall(DHCP.registerIfNeeded)
   if(not success) then
     _G.IP.logger.write("#[DHCPServer] No DHCP servers found on this network.")
   end
@@ -77,10 +76,10 @@ local function setup()
     0xFFFFFFFFFF  -- IP #0, #1, and the last IP in the system.
   }
   event.listen("multiport_message", function(_, _, _, targetPort, _, message)
-    if(targetPort == dhcpServerPort) then
+    if(targetPort == dhcpServerPort and serialization.unserialize(message).protocol == dhcpProtocol) then
       onDHCPMessage(serialization.unserialize(message))
     end
   end)
 end
 
-return {dhcpServer = dhcpServer, setup = setup}
+return dhcpServer

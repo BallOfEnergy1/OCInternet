@@ -51,6 +51,7 @@ local function setup()
     _G.IP = {}
     do
       _G.IP.__packet       = {
+        protocol = nil,
         senderPort = nil,
         targetPort = nil,
         targetMAC = nil,
@@ -65,8 +66,8 @@ local function setup()
       _G.IP.defaultGateway = util.fromUserFormat("0123:4500:0000:0001")
       _G.IP.MAC            = require("component").modem.address
     end
-    require("IP/packetFrag").setup()
-    require("IP/multiport").setup()
+    require("IP.packetFrag").setup()
+    require("IP.multiport").setup()
     _G.IP.isInitialized = true
   end
 end

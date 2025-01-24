@@ -87,7 +87,7 @@ end
 function fragmentation.receive(_, b, c, targetPort, d, message)
   local packet = serialization.unserialize(message)
   if(not packet.seq) then
-    require("IP/multiport").process(_, b, c, targetPort, d, message)
+    require("IP.multiport").process(_, b, c, targetPort, d, message)
   else
     if(not _G.FRAG.packetCache[packet.senderMAC]) then
       _G.FRAG.packetCache[packet.senderMAC] = {}
@@ -101,11 +101,12 @@ function fragmentation.receive(_, b, c, targetPort, d, message)
       if(serialization.unserialize(_G.FRAG.packetCache[packet.senderMAC][packet.targetPort].data) == nil) then
         -- Likely corrupted.
         _G.IP.logger.write("Invalid deserialization on packet.")
+        _G.IP.logger.write("Data: " .. _G.FRAG.packetCache[packet.senderMAC][packet.targetPort].data)
         return
       end
       local newPacket = packet
       newPacket.data = serialization.unserialize(_G.FRAG.packetCache[packet.senderMAC][packet.targetPort].data)
-      require("IP/multiport").process(_, b, c, targetPort, d, serialization.serialize(newPacket))
+      require("IP.multiport").process(_, b, c, targetPort, d, serialization.serialize(newPacket))
       _G.FRAG.packetCache[packet.senderMAC][packet.targetPort] = nil
       if(#_G.FRAG.packetCache[packet.senderMAC] == 0) then
         _G.FRAG.packetCache[packet.senderMAC] = nil

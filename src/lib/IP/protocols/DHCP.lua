@@ -1,13 +1,14 @@
 
-local multiport = require("IP/multiport").multiport
+local multiport = require("IP.multiport").multiport
 local event = require("event")
 local serialization = require("serialization")
-local util = require("IP/IPUtil").util
+local util = require("IP.IPUtil").util
 
 local dhcp = {}
 
 local dhcpServerPort = 27
 local dhcpClientPort = 26
+local dhcpProtocol = 3
 
 local function onDHCPMessage(receivedPacket)
   if(receivedPacket.data == 0x11) then
@@ -19,15 +20,15 @@ function dhcp.flush()
   _G.DHCP.DHCPRegistered = false
 end
 
-local function setup()
+function dhcp.setup()
   if(not _G.DHCP or not _G.DHCP.isInitialized) then
     _G.DHCP = {}
     do
       _G.DHCP.DHCPRegistered = false
-      _G.DHCP.static         = true
+      _G.DHCP.static         = false
     end
     event.listen("multiport_message", function(_, _, _, targetPort, _, message)
-      if(targetPort == dhcpClientPort) then
+      if(targetPort == dhcpClientPort and serialization.unserialize(message).protocol == dhcpProtocol) then
         onDHCPMessage(serialization.unserialize(message))
       end
     end)
@@ -42,11 +43,13 @@ function dhcp.registerIfNeeded()
   end
   if(not _G.DHCP.DHCPRegistered) then
     local packet = _G.IP.__packet
+    packet.protocol = dhcpProtocol
     packet.senderPort = dhcpClientPort -- Server -> Client
     packet.senderIP   = 0
     packet.senderMAC  = _G.IP.MAC
     packet.targetPort = dhcpServerPort -- Client -> Server
-    local raw = multiport.requestMessageWithTimeout(packet, true, true, 2, 3, function(_, _, _, targetPort) return targetPort == dhcpClientPort end)
+    local raw = multiport.requestMessageWithTimeout(packet, true, true, 2, 3,
+      function(_, _, _, targetPort, _, message) return targetPort == dhcpClientPort and serialization.unserialize(message).protocol == dhcpProtocol end)
     if(raw == nil) then
       _G.IP.logger.write("#[DHCP] DHCP Failed (3 tries).")
       return
@@ -64,4 +67,4 @@ function dhcp.registerIfNeeded()
   end
 end
 
-return {dhcp = dhcp, setup = setup}
+return dhcp

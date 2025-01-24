@@ -1,13 +1,14 @@
 
 local packetUtil  = {}
 
-function packetUtil.construct(targetIP, targetPort, data)
+function packetUtil.construct(protocol, targetIP, targetPort, data)
   local dynPort = math.random(49152, 65535) -- Random dynamic port.
   local newPacket = _G.IP.__packet
-  require("IP/protocols/DHCP").dhcp.registerIfNeeded()
+  require("IP.protocols.DHCP").registerIfNeeded()
+  newPacket.protocol = protocol
   newPacket.senderPort = dynPort
   newPacket.targetPort = targetPort
-  newPacket.targetMAC  = require("IP/protocols/ARP").resolve(targetIP)
+  newPacket.targetMAC  = require("IP.protocols.ARP").resolve(targetIP)
   newPacket.senderMAC  = _G.IP.MAC
   newPacket.senderIP   = _G.IP.clientIP
   newPacket.targetIP   = targetIP
@@ -15,10 +16,11 @@ function packetUtil.construct(targetIP, targetPort, data)
   return newPacket
 end
 
-function packetUtil.constructWithKnownMAC(targetMAC, targetIP, targetPort, data)
+function packetUtil.constructWithKnownMAC(protocol, targetMAC, targetIP, targetPort, data)
   local dynPort = math.random(49152, 65535) -- Random dynamic port.
   local newPacket = _G.IP.__packet
-  require("IP/protocols/DHCP").dhcp.registerIfNeeded()
+  require("IP.protocols.DHCP").registerIfNeeded()
+  newPacket.protocol = protocol
   newPacket.senderPort = dynPort
   newPacket.targetPort = targetPort
   newPacket.targetMAC  = targetMAC
