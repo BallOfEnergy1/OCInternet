@@ -62,6 +62,7 @@ if(args[1] ~= nil and type(args[1]) == "string") then -- Take as IP.
     end
     for i = 1, count do
       local pcTime = require("computer").uptime()
+      local uptime;
       local response, code = ICMP.send(IP, 0x1A, makePayload(32), true)
       if(response == nil) then
         if(code == -1) then
@@ -71,11 +72,12 @@ if(args[1] ~= nil and type(args[1]) == "string") then -- Take as IP.
         print("Ping timed out.")
         table.insert(pings, {received=false})
       else
-        print("Reply from " .. args[1] .. ": bytes=" .. payloadSize .. " time=" .. require("computer").uptime() - pcTime)
-        table.insert(pings, {time=require("computer").uptime() - pcTime, received=true})
+        uptime = require("computer").uptime()
+        print("Reply from " .. args[1] .. ": bytes=" .. payloadSize .. " time=" .. uptime - pcTime)
+        table.insert(pings, {time=uptime - pcTime, received=true})
       end
       if(i ~= count) then
-        if(event.pull(1, "interrupted")) then
+        if(event.pull((1 - (uptime - pcTime)), "interrupted")) then
           printInfo(pings)
           return
         end

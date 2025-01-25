@@ -42,7 +42,7 @@ function arp.resolve(IP)
   packet.senderIP   = _G.IP.clientIP
   packet.senderMAC  = _G.IP.MAC
   packet.data = IP
-  local raw, code = multiport.requestMessageWithTimeout(packet, false, true, 2, 2,
+  local raw, code = multiport.requestMessageWithTimeout(packet, true, true, 3, 1,
     function(_, _, _, targetPort, _, message) return targetPort == arpPort and serialization.unserialize(message).protocol == arpProtocol end)
   if(raw == nil) then
     if(code == -1) then
