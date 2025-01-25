@@ -6,7 +6,7 @@ local event = require("event")
 
 local fragmentation = {}
 
-local MTU = 60
+local MTU = 8192
 
 local maxMTU
 if(modem.maxPacketSize == nil) then
@@ -102,6 +102,11 @@ function fragmentation.receive(_, b, c, targetPort, d, message)
         -- Likely corrupted.
         _G.IP.logger.write("Invalid deserialization on packet.")
         _G.IP.logger.write("Data: " .. _G.FRAG.packetCache[packet.senderMAC][packet.targetPort].data)
+        _G.IP.logger.write("Erasing SEQ queue...")
+        _G.FRAG.packetCache[packet.senderMAC][packet.targetPort] = nil
+        if(#_G.FRAG.packetCache[packet.senderMAC] == 0) then
+          _G.FRAG.packetCache[packet.senderMAC] = nil
+        end
         return
       end
       local newPacket = packet

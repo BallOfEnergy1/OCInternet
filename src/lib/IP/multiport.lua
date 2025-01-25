@@ -30,7 +30,10 @@ function multiport.requestMessageWithTimeout(packet, skipRegister, broadcast, ti
     multiport.send(packet, skipRegister)
   end
   ::wait::
-  local a, b, c, d, e, f = event.pull(timeout, "multiport_message")
+  local a, b, c, d, e, f = event.pullFiltered(timeout, function(name) return name == "multiport_message" or name == "interrupted" end)
+  if(a == "interrupted") then
+    return nil, -1
+  end
   if(a == nil) then
     tries = tries + 1
     if(tries > attempts) then

@@ -48,9 +48,12 @@ function dhcp.registerIfNeeded()
     packet.senderIP   = 0
     packet.senderMAC  = _G.IP.MAC
     packet.targetPort = dhcpServerPort -- Client -> Server
-    local raw = multiport.requestMessageWithTimeout(packet, true, true, 2, 3,
+    local raw, code = multiport.requestMessageWithTimeout(packet, true, true, 2, 3,
       function(_, _, _, targetPort, _, message) return targetPort == dhcpClientPort and serialization.unserialize(message).protocol == dhcpProtocol end)
     if(raw == nil) then
+      if(code == -1) then
+        return nil, code
+      end
       _G.IP.logger.write("#[DHCP] DHCP Failed (3 tries).")
       return
     end

@@ -10,30 +10,33 @@ local icmpProtocol = 1
 local icmp = {}
 
 local function onICMPMessage(receivedPacket)
-  if(receivedPacket.type == 0x1A) then -- ICMP echo request.
-    multiport.send(packetUtil.constructWithKnownMAC(
-      icmpProtocol,
-      receivedPacket.senderMAC,
-      receivedPacket.senderIP,
-      icmpPort,
-      {type = 0x00, payload = receivedPacket.payload} -- ICMP echo reply.
-    ))
+  local data = serialization.unserialize(receivedPacket.data)
+  if(data.type == 0x1A) then -- ICMP echo request.
+    icmp.send(receivedPacket.senderIP, 0x00, serialization.unserialize(data.payload) or data.payload, false) -- ICMP echo reply.
   end
 end
 
-function icmp.send(IP, type, payload)
-  local raw = multiport.requestMessageWithTimeout(packetUtil.construct(
-    icmpProtocol,
-    IP,
-    icmpPort,
-    {type = type, payload = payload}
-  , true, true, 2, 4, function(_, _, _, targetPort, _, message) return targetPort == icmpPort and serialization.unserialize(message).protocol == icmpProtocol end))
-  if(raw == nil) then
-    _G.IP.logger.write("#[ICMP] ICMP timed out.")
-    return
+function icmp.send(IP, type, payload, expectResponse)
+  local packet = packetUtil.construct(
+          icmpProtocol,
+          IP,
+          icmpPort,
+          serialization.serialize({type = type, payload = payload}))
+  if(expectResponse) then
+    local raw, code = multiport.requestMessageWithTimeout(packet
+    , false, false, 5, 1, function(_, _, _, targetPort, _, message) return targetPort == icmpPort and serialization.unserialize(message).protocol == icmpProtocol end)
+    if(raw == nil) then
+      if(code == -1) then
+        return nil, code
+      end
+      _G.IP.logger.write("#[ICMP] ICMP timed out.")
+      return
+    end
+    local message = serialization.unserialize(raw)
+    return message
+  else
+    multiport.send(packet, false)
   end
-  local message = serialization.unserialize(raw)
-  return message
 end
 
 function icmp.setup()
