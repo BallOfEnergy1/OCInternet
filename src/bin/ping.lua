@@ -36,7 +36,7 @@ local function printInfo(pings)
   avg = totalTime / #pings
   print("\tPackets: Sent = " .. #pings .. ", Received = " .. received .. ", Lost = " .. #pings - received .. ",")
   print("Approximate round trip times in ticks:")
-  print("\tMinimum = " .. math.floor(min*20*100)/100 .. " ticks, Maximum = " .. math.floor(max*20*100)/100 .. " ticks, Average = " .. math.floor(avg*20*100)/100 .. " ticks")
+  print("\tMinimum = " .. math.floor((min or 0)*20*100)/100 .. " ticks, Maximum = " .. math.floor((max or 0)*20*100)/100 .. " ticks, Average = " .. math.floor((avg or 0)*20*100)/100 .. " ticks")
 end
 
 if(args[1] ~= nil and type(args[1]) == "string") then -- Take as IP.
@@ -77,7 +77,7 @@ if(args[1] ~= nil and type(args[1]) == "string") then -- Take as IP.
         table.insert(pings, {time=uptime - pcTime, received=true})
       end
       if(i ~= count) then
-        if(event.pull((1 - (uptime - pcTime)), "interrupted")) then
+        if(event.pull((1 - ((uptime or pcTime + 1) - pcTime)), "interrupted")) then
           printInfo(pings)
           return
         end

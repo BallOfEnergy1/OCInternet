@@ -1,24 +1,16 @@
 
-local multiport = require("IP.multiport").multiport
-local event = require("event")
-local serialization = require("serialization")
 local util = require("IP.IPUtil").util
 local APIPA = require("IP.protocols.APIPA")
+local udp = require("IP.protocols.UDP")
 
 local dhcp = {}
 
 local dhcpServerPort = 27
 local dhcpClientPort = 26
-local dhcpProtocol = 3
 
-local function onDHCPMessage(receivedPacket)
-  if(receivedPacket.data == 0x11) then
-    dhcp.flush()
-  end
-end
-
-function dhcp.flush()
+function dhcp.release()
   _G.DHCP.DHCPRegistered = false
+  udp.broadcast(dhcpServerPort, 0x10, true)
 end
 
 function dhcp.setup()
@@ -26,11 +18,13 @@ function dhcp.setup()
     _G.DHCP = {}
     do
       _G.DHCP.DHCPRegistered = false
-      _G.DHCP.static         = false
+      local config = {}
+      loadfile("/etc/IP.conf", "t", config)()
+      _G.DHCP.static         = config.DHCP.static
     end
-    event.listen("multiport_message", function(_, _, _, targetPort, _, message)
-      if(targetPort == dhcpClientPort and serialization.unserialize(message).protocol == dhcpProtocol) then
-        onDHCPMessage(serialization.unserialize(message))
+    udp.UDPListen(dhcpClientPort, function(receivedPacket)
+      if(receivedPacket.data == 0x11) then
+        dhcp.release()
       end
     end)
     _G.DHCP.isInitialized = true
@@ -43,23 +37,20 @@ function dhcp.registerIfNeeded()
     return
   end
   if(not _G.DHCP.DHCPRegistered) then
-    local packet = _G.IP.__packet
-    packet.protocol = dhcpProtocol
-    packet.senderPort = dhcpClientPort -- Server -> Client
-    packet.senderIP   = 0
-    packet.senderMAC  = _G.IP.MAC
-    packet.targetPort = dhcpServerPort -- Client -> Server
     local attempts = 2
-    local raw, code = multiport.requestMessageWithTimeout(packet, true, true, 2, attempts,
-      function(_, _, _, targetPort, _, message) return targetPort == dhcpClientPort and serialization.unserialize(message).protocol == dhcpProtocol end)
-    if(raw == nil) then
-      if(code == -1) then
-        return nil, code
-      end
+    local message, code
+    for _ = 1, attempts do
+      udp.broadcast(dhcpServerPort, nil, true)
+      message, code = udp.pullUDP(dhcpClientPort, 5)
+      if(message or code == -1) then break end
+    end
+    if(code == -1) then
+      return nil, code
+    end
+    if(not message) then
       _G.IP.logger.write("#[DHCP] DHCP Failed (" .. attempts .. " tries), defaulting to APIPA.")
       return APIPA.register()
     end
-    local message = serialization.unserialize(raw)
     --------------------------------------------------------------------------------
     _G.IP.logger.write("#[DHCP] DHCP registration success.")
     _G.DHCP.DHCPRegistered = true

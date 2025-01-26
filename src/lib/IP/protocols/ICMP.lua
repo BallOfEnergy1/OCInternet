@@ -2,7 +2,7 @@
 local multiport = require("IP.multiport").multiport
 local serialization = require("serialization")
 local event = require("event")
-local packetUtil = require("IP.packetUtil")
+local Packet = require("IP.packetClass")
 
 local icmpPort = 0
 local icmpProtocol = 1
@@ -17,11 +17,7 @@ local function onICMPMessage(receivedPacket)
 end
 
 function icmp.send(IP, type, payload, expectResponse)
-  local packet = packetUtil.construct(
-          icmpProtocol,
-          IP,
-          icmpPort,
-          serialization.serialize({type = type, payload = payload}))
+  local packet = Packet:new(icmpProtocol, IP, icmpPort, {type = type, payload = payload}):build()
   if(expectResponse) then
     local raw, code = multiport.requestMessageWithTimeout(packet
     , false, false, 5, 1, function(_, _, _, targetPort, _, message) return targetPort == icmpPort and serialization.unserialize(message).protocol == icmpProtocol end)

@@ -1,4 +1,6 @@
 
+local component = require("component")
+
 local function getUserYN()
   local userInput = io.read()
   if(userInput == "y" or userInput == "Y") then
@@ -33,6 +35,57 @@ print(">ICMP end")
 
 print("Libraries started.")
 
+local externalModemAddr
+do
+  ::select::
+  print("Select network card for internal communications.")
+  local i = 1
+  for addr, modem in pairs(component.list("modem")) do
+    print(i .. ": " .. addr .. "; " .. modem)
+    i = i + 1
+  end
+  local num = io.read()
+  if(not tonumber(num) or tonumber(num) > #component.list("modem")) then
+    goto select
+  end
+  local j = 1
+  for addr in pairs(component.list("modem")) do
+    if(i == j) then
+      externalModemAddr = addr
+      break
+    end
+    j = j + 1
+  end
+end
+local internalModemAddr
+do
+  ::select::
+  print("Select network card for internal communications.")
+  local i = 1
+  for addr, modem in pairs(component.list("modem")) do
+    print(i .. ": " .. addr .. "; " .. modem)
+    i = i + 1
+  end
+  local num = io.read()
+  if(not tonumber(num) or tonumber(num) > #component.list("modem")) then
+    goto select
+  end
+  local j = 1
+  for addr in pairs(component.list("modem")) do
+    if(i == j) then
+      internalModemAddr = addr
+      break
+    end
+    j = j + 1
+  end
+end
+
+_G.ROUTE = {}
+_G.ROUTE.externalModem = _G.IP.modems[externalModemAddr]
+_G.ROUTE.internalModem = _G.IP.modems[internalModemAddr]
+_G.ROUTE.routeModem = _G.IP.modems[internalModemAddr]
+_G.ROUTE.isInitialized = true
+
 print("Checking presence of default gateway...")
 local response, code = ARP.resolve(_G.IP.defaultGateway)
 if(response) then
@@ -53,3 +106,16 @@ print("Setting IP...")
 DHCP.flush()
 _G.IP.clientIP = _G.IP.defaultGateway
 print("IP set to " .. IPUtil.util.toUserFormat(_G.IP.clientIP))
+
+local event = require("event")
+local serialization = require("serialization")
+local util = require("IP.IPUtil").util
+
+event.listen("multiport_message", function(_, _, _, _, _, message)
+  if(serialization.unserialize(message).targetIP ~= util.fromUserFormat("0000:0000:0000:0000") and -- Check for broadcasts and filter out.
+    serialization.unserialize(message).targetIP ~= util.fromUserFormat("FFFF:FFFF:FFFF:FFFF")
+  ) then
+    local packet = serialization.unserialize(message)
+    -- TODO: Implement RIPv2 for routing.
+  end
+end)

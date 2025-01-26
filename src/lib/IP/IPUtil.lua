@@ -1,6 +1,7 @@
 local util = {}
 
 local logutil = require("logutil")
+local component = require("component")
 
 function util.toHex(dec)
   local output = string.format("%x", dec)
@@ -45,28 +46,49 @@ function util.getID(IP)
   return IP & (~_G.IP.subnetMask)
 end
 
+local Modem = {
+  clientIP = nil,
+  subnetMask = nil,
+  defaultGateway = nil,
+  MAC = nil,
+  modem = nil,
+}
+
+function Modem:new(o, clientIP, subnetMask, defaultGateway, MAC, modem)
+  o = o or {}
+  setmetatable(o, self)
+  self.clientIP = clientIP
+  self.subnetMask = subnetMask
+  self.defaultGateway = defaultGateway
+  self.MAC  = MAC
+  self.modem   = modem
+  return o
+end
+
 local function setup()
   require("filesystem").makeDirectory("/var/ip") -- TODO get rid of this bs
   if(not _G.IP or not _G.IP.isInitialized) then
     _G.IP = {}
     do
-      _G.IP.__packet       = {
-        protocol = nil,
-        senderPort = nil,
-        targetPort = nil,
-        targetMAC = nil,
-        senderMAC = nil,
-        senderIP = nil,
-        targetIP = nil,
-        data = nil
-      }
-      _G.IP.logger         = logutil.initLogger("IPv4.1", "/var/ip/ip.log")
-      _G.IP.clientIP       = util.fromUserFormat("0123:4567:89ab:cdef")
-      _G.IP.subnetMask     = util.fromUserFormat("FFFF:FF00:0000:0000")
-      _G.IP.defaultGateway = util.fromUserFormat("0123:4500:0000:0001")
-      _G.IP.MAC            = require("component").modem.address
+      _G.IP.logger = logutil.initLogger("IPv4.1", "/var/ip/ip.log")
+      _G.IP.modems = {}
+      local config = {}
+      loadfile("/etc/IP.conf", "t", config)()
+      for addr in pairs(component.list("modem")) do
+        local modem = Modem:new(
+          util.fromUserFormat(config.IP.staticIP),
+          util.fromUserFormat(config.IP.staticSubnetMask),
+          util.fromUserFormat(config.IP.staticGateway),
+          addr,
+          component.proxy(addr)
+        )
+        require("IP.packetFrag").setup(modem)
+        _G.IP.modems[addr] = modem
+        if(_G.IP.primaryModem == nil) then
+          _G.IP.primaryModem = modem
+        end
+      end
     end
-    require("IP.packetFrag").setup()
     require("IP.multiport").setup()
     _G.IP.isInitialized = true
   end
