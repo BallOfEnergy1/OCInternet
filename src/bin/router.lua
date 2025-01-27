@@ -38,19 +38,20 @@ print("Libraries started.")
 local externalModemAddr
 do
   ::select::
-  print("Select network card for internal communications.")
+  print("Select network card for external communications.")
   local i = 1
   for addr, modem in pairs(component.list("modem")) do
     print(i .. ": " .. addr .. "; " .. modem)
     i = i + 1
   end
   local num = io.read()
-  if(not tonumber(num) or tonumber(num) > #component.list("modem")) then
+  if(not tonumber(num) or tonumber(num) > i - 1) then
+    print("Try again.")
     goto select
   end
   local j = 1
   for addr in pairs(component.list("modem")) do
-    if(i == j) then
+    if(tonumber(num) == j) then
       externalModemAddr = addr
       break
     end
@@ -67,12 +68,13 @@ do
     i = i + 1
   end
   local num = io.read()
-  if(not tonumber(num) or tonumber(num) > #component.list("modem")) then
+  if(not tonumber(num) or tonumber(num) > i - 1) then
+    print("Try again.")
     goto select
   end
   local j = 1
   for addr in pairs(component.list("modem")) do
-    if(i == j) then
+    if(tonumber(num) == j) then
       internalModemAddr = addr
       break
     end
@@ -87,13 +89,15 @@ _G.ROUTE.routeModem = _G.IP.modems[internalModemAddr]
 _G.ROUTE.isInitialized = true
 
 print("Checking presence of default gateway...")
-local response, code = ARP.resolve(_G.IP.defaultGateway)
+local addr = _G.ROUTE.internalModem.MAC
+local response, code = ARP.resolve(_G.IP.modems[addr].defaultGateway)
 if(response) then
   if(code == -1) then
     print("Operation canceled.")
     return
   end
   print("Failed to start router software, default gateway already present.")
+  return
 end
 print("No default gateway found.")
 
@@ -103,13 +107,13 @@ DHCPServer.setup()
 print("DHCP server started.")
 
 print("Setting IP...")
-DHCP.flush()
-_G.IP.clientIP = _G.IP.defaultGateway
-print("IP set to " .. IPUtil.util.toUserFormat(_G.IP.clientIP))
+DHCP.release()
+_G.IP.modems[addr].clientIP = _G.IP.modems[addr].defaultGateway
+print("IP set to " .. IPUtil.toUserFormat(_G.IP.modems[addr].clientIP))
 
 local event = require("event")
 local serialization = require("serialization")
-local util = require("IP.IPUtil").util
+local util = require("IP.IPUtil")
 
 event.listen("multiport_message", function(_, _, _, _, _, message)
   if(serialization.unserialize(message).targetIP ~= util.fromUserFormat("0000:0000:0000:0000") and -- Check for broadcasts and filter out.

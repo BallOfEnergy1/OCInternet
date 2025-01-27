@@ -1,7 +1,7 @@
 
 local ICMP = require("IP.protocols.ICMP")
 local shell = require("shell")
-local util = require("IP.IPUtil").util
+local util = require("IP.IPUtil")
 local ARP = require("IP.protocols.ARP")
 local event = require("event")
 
@@ -60,10 +60,11 @@ if(args[1] ~= nil and type(args[1]) == "string") then -- Take as IP.
     elseif(ops.t) then
       count = math.huge
     end
+    local payload = makePayload(payloadSize)
     for i = 1, count do
       local pcTime = require("computer").uptime()
       local uptime;
-      local response, code = ICMP.send(IP, 0x1A, makePayload(32), true)
+      local response, code = ICMP.send(IP, 0x1A, payload, true)
       if(response == nil) then
         if(code == -1) then
           printInfo(pings)

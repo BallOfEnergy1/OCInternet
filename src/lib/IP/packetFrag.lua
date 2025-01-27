@@ -24,7 +24,7 @@ local function fragmentPacket(modem, port, packet, MAC)
     local packetSize = #serialization.serialize(packet)
     local dataToSend = serialization.serialize(packet.data)
     local headerSize = packetSize - #dataToSend + 2 -- Packet overhead.
-    local adjustedMTU
+    local adjustedMTU = MTU
     if(MTU < headerSize) then
       adjustedMTU = MTU + (headerSize - MTU) + 100 -- Plus 100 bytes for extra data.
       if(adjustedMTU > maxMTU) then -- tf
@@ -32,17 +32,17 @@ local function fragmentPacket(modem, port, packet, MAC)
         return
       end
     end
-    local seq = 1
+    local seq = 0
     local packetCopy = packet
     while #dataToSend >= 1 do
-      packetCopy.data = dataToSend:sub(0, seq * adjustedMTU - headerSize)
+      packetCopy.data = dataToSend:sub(0, adjustedMTU - headerSize)
       packetCopy.seq = seq -- Since no matter what number is put in, the data size shouldn't change, we can do this without worry.
       if(MAC) then
         modem.send(MAC, port, serialization.serialize(packetCopy))
       else
         modem.broadcast(port, serialization.serialize(packetCopy))
       end
-      dataToSend = dataToSend:sub((seq) * adjustedMTU - headerSize)
+      dataToSend = dataToSend:sub(adjustedMTU - headerSize)
       seq = seq + 1
     end
     packetCopy.data = nil
@@ -53,7 +53,7 @@ local function fragmentPacket(modem, port, packet, MAC)
       modem.broadcast(port, serialization.serialize(packetCopy))
     end
   end
-  if(packet) then
+  if(MAC) then
     modem.send(MAC, port, serialization.serialize(packet))
   else
     modem.broadcast(port, serialization.serialize(packet))
@@ -61,20 +61,21 @@ local function fragmentPacket(modem, port, packet, MAC)
 end
 
 function fragmentation.send(MAC, port, packet)
-  local modem = _G.ROUTE and _G.ROUTE.routeModem or _G.IP.primaryModem
+  local modem = _G.ROUTE and _G.ROUTE.routeModem.modem or _G.IP.primaryModem.modem
   fragmentPacket(modem, port, packet, MAC)
 end
 
 function fragmentation.broadcast(port, packet)
-  local modem = _G.ROUTE and _G.ROUTE.routeModem or _G.IP.primaryModem
+  local modem = _G.ROUTE and _G.ROUTE.routeModem.modem or _G.IP.primaryModem.modem
   fragmentPacket(modem, port, packet)
 end
 
-local function setup()
+function fragmentation.setup()
   if(not _G.FRAG or not _G.FRAG.isInitialized) then
     _G.FRAG = {}
     do
       for i in pairs(_G.IP.modems) do
+        _G.FRAG[i] = {}
         _G.FRAG[i].packetCache = {}
       end
     end
@@ -86,7 +87,7 @@ end
 function fragmentation.receive(_, receiverMAC, c, targetPort, d, message)
   local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
   local packet = serialization.unserialize(message)
-  if(receiverMAC ~= message.targetMAC and message.targetMAC ~= "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF") then
+  if(receiverMAC ~= addr or (receiverMAC ~= packet.targetMAC and packet.targetMAC ~= "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF")) then
     _G.FRAG[addr].packetCache[packet.senderMAC] = nil
     return
   end
@@ -133,4 +134,4 @@ function fragmentation.receive(_, receiverMAC, c, targetPort, d, message)
   end
 end
 
-return {fragmentation = fragmentation, setup = setup}
+return fragmentation

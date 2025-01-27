@@ -1,8 +1,12 @@
 local IPUtil = require("IP.IPUtil")
 IPUtil.setup()
+_G.IP.logger.write("IPUtil initialized.")
 local ARP = require("IP.protocols.ARP")
 ARP.setup() -- Init ARP before DHCP in-case APIPA is used.
+_G.IP.logger.write("ARP initialized.")
 local DHCP = require("IP.protocols.DHCP")
 DHCP.setup()
+_G.IP.logger.write("DHCP initialized.")
 local ICMP = require("IP.protocols.ICMP")
 ICMP.setup()
+_G.IP.logger.write("ICMP initialized.")

@@ -39,11 +39,13 @@ function util.createIP(subnet, ID)
 end
 
 function util.getSubnet(IP)
-  return IP & _G.IP.subnetMask
+  local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
+  return IP & _G.IP.modems[addr].subnetMask
 end
 
 function util.getID(IP)
-  return IP & (~_G.IP.subnetMask)
+  local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
+  return IP & (~_G.IP.modems[addr].subnetMask)
 end
 
 local Modem = {
@@ -54,8 +56,8 @@ local Modem = {
   modem = nil,
 }
 
-function Modem:new(o, clientIP, subnetMask, defaultGateway, MAC, modem)
-  o = o or {}
+function Modem:new(clientIP, subnetMask, defaultGateway, MAC, modem)
+  local o = Modem
   setmetatable(o, self)
   self.clientIP = clientIP
   self.subnetMask = subnetMask
@@ -65,7 +67,7 @@ function Modem:new(o, clientIP, subnetMask, defaultGateway, MAC, modem)
   return o
 end
 
-local function setup()
+function util.setup()
   require("filesystem").makeDirectory("/var/ip") -- TODO get rid of this bs
   if(not _G.IP or not _G.IP.isInitialized) then
     _G.IP = {}
@@ -82,19 +84,16 @@ local function setup()
           addr,
           component.proxy(addr)
         )
-        require("IP.packetFrag").setup(modem)
+        require("IP.multiport").setupModem(modem.modem)
         _G.IP.modems[addr] = modem
         if(_G.IP.primaryModem == nil) then
           _G.IP.primaryModem = modem
         end
       end
     end
-    require("IP.multiport").setup()
+    require("IP.packetFrag").setup()
     _G.IP.isInitialized = true
   end
 end
 
-return {
-  util      = util,
-  setup     = setup
-}
+return util

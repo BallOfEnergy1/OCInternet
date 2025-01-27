@@ -1,8 +1,9 @@
 
-local multiport = require("IP.multiport").multiport
+local multiport = require("IP.multiport")
 local serialization = require("serialization")
 local event = require("event")
 local Packet = require("IP.packetClass")
+local util = require("IP.IPUtil")
 
 local arpPort = 3389
 local arpProtocol = 2
@@ -12,8 +13,9 @@ local arp = {}
 local timeout = 300
 
 local function onARPMessage(receivedPacket)
-  if(receivedPacket.data == _G.IP.clientIP) then
-    multiport.send(Packet:new(arpProtocol, receivedPacket.senderIP, arpPort, _G.IP.MAC, receivedPacket.senderMAC):build())
+  local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
+  if(receivedPacket.data == _G.IP.modems[addr].clientIP) then
+    multiport.send(Packet:new(nil, arpProtocol, receivedPacket.senderIP, arpPort, _G.IP.MAC, receivedPacket.senderMAC):build())
   end
 end
 
@@ -21,7 +23,7 @@ local function getTimeout(time)
   return time + require("computer").uptime()
 end
 
-function arp.resolve(IP)
+function arp.resolve(IP, skipRegistration)
   for MAC, IPtable in pairs(_G.ARP.cachedMappings) do
     if(IPtable.IP == IP and IPtable.timeout > require("computer").uptime()) then
       return MAC
@@ -29,7 +31,7 @@ function arp.resolve(IP)
       arp.trimCache()
     end
   end
-  local packet = Packet:new(arpProtocol, nil, arpPort, IP)
+  local packet = Packet:new(nil, arpProtocol, util.fromUserFormat("FFFF:FFFF:FFFF:FFFF"), arpPort, IP, nil, skipRegistration):build()
   local raw, code = multiport.requestMessageWithTimeout(packet, true, true, 3, 1,
     function(_, _, _, targetPort, _, message) return targetPort == arpPort and serialization.unserialize(message).protocol == arpProtocol end)
   if(raw == nil) then

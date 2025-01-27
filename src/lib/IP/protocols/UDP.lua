@@ -1,9 +1,9 @@
 
-local multiport = require("IP.multiport").multiport
+local multiport = require("IP.multiport")
 local serialization = require("serialization")
 local event  = require("event")
 local Packet = require("IP.packetClass")
-local util   = require("IP.IPUtil").util
+local util   = require("IP.IPUtil")
 
 local udpProtocol = 4
 
@@ -45,13 +45,15 @@ function udp.pullUDP(port, timeout, callback)
   end
 end
 
-function udp.send(IP, port, payload, skipRegistration)
-  local packet = Packet.new(udpProtocol, IP, port, payload):build()
+function udp.send(IP, port, payload, protocol, skipRegistration)
+  local packet = Packet:new(nil, udpProtocol, IP, port, payload, nil, skipRegistration):build()
+  packet.udpProto = protocol
   multiport.send(packet, skipRegistration)
 end
 
-function udp.broadcast(port, payload, skipRegistration)
-  local packet = Packet:new(udpProtocol, util.fromUserFormat("FFFF:FFFF:FFFF:FFFF"), port, payload):build()
+function udp.broadcast(port, payload, protocol, skipRegistration)
+  local packet = Packet:new(nil, udpProtocol, util.fromUserFormat("FFFF:FFFF:FFFF:FFFF"), port, payload, nil, skipRegistration):build()
+  packet.udpProto = protocol
   multiport.broadcast(packet, skipRegistration)
 end
 

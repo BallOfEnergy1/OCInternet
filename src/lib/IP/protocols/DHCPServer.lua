@@ -1,18 +1,19 @@
 local DHCP = require("IP.protocols.DHCP")
-local util = require("IP.IPUtil").util
+local util = require("IP.IPUtil")
 local Packet = require("IP.packetClass")
-local multiport = require("IP.multiport").multiport
+local multiport = require("IP.multiport")
 local tableUtil = require("tableutil")
 local udp = require("IP.protocols.UDP")
 
 local dhcpServerPort = 27
 local dhcpClientPort = 26
+local dhcpUDPProtocol = 1
 
 local dhcpServer = {}
 
 function dhcpServer.flushAllAndNotify() -- This is to prevent the IP space from getting very full. Run this occasionally and clients will not be affected (too much).
   for _, v in pairs(_G.DHCP.allRegisteredMACs) do
-    udp.send(v, dhcpClientPort, 0x11)
+    udp.send(v, dhcpClientPort, 0x11, dhcpUDPProtocol)
   end
   _G.DHCP.allRegisteredMACs = {}
   _G.DHCP.IPIndex = 0
@@ -20,6 +21,9 @@ end
 
 local function onDHCPMessage(receivedPacket)
   if(receivedPacket.data == 0x10) then
+    if(not _G.DHCP.allRegisteredMACs[receivedPacket.senderMAC]) then
+      return
+    end
     _G.DHCP.IPIndex = _G.DHCP.allRegisteredMACs[receivedPacket.senderMAC].index
     _G.DHCP.allRegisteredMACs[receivedPacket.senderMAC] = {}
     return
@@ -49,7 +53,8 @@ local function onDHCPMessage(receivedPacket)
     IP = util.createIP(_G.DHCP.subnetIdentifier, _G.DHCP.IPIndex)
   end
   _G.IP.logger.write("#[DHCPServer] Sending IP '" .. IP .. "' to client.")
-  multiport.send(Packet:new(4 --[[ UDP ]], 0, dhcpClientPort, {registeredIP = IP, subnetMask = _G.DHCP.providedSubnetMask, defaultGateway = _G.IP.defaultGateway}, receivedPacket.senderMAC):build())
+  local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
+  multiport.send(Packet:new(nil, 4 --[[ UDP ]], 0, dhcpClientPort, {registeredIP = IP, subnetMask = _G.DHCP.providedSubnetMask, defaultGateway = _G.IP.modems[addr].defaultGateway}, receivedPacket.senderMAC):build())
   _G.DHCP.allRegisteredMACs[receivedPacket.senderMAC] = {ip = IP, index = _G.DHCP.IPIndex}
 end
 
@@ -63,12 +68,9 @@ end
 
 function dhcpServer.setup()
   DHCP.setup()
-  local success = pcall(DHCP.registerIfNeeded)
-  if(not success) then
-    _G.IP.logger.write("#[DHCPServer] No DHCP servers found on this network.")
-  end
-  _G.DHCP.providedSubnetMask = _G.IP.subnetMask
-  _G.DHCP.subnetIdentifier = util.getSubnet(_G.IP.clientIP)
+  local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
+  _G.DHCP.providedSubnetMask = _G.IP.modems[addr].subnetMask
+  _G.DHCP.subnetIdentifier = util.getSubnet(_G.IP.modems[addr].clientIP)
   local config = {}
   loadfile("/etc/IP.conf", "t", config)()
   _G.DHCP.IPIndex = config.DHCPServer.startingIndex
@@ -79,7 +81,11 @@ function dhcpServer.setup()
     1,
     0xFFFFFFFFFF  -- IP #0, #1, and the last IP in the system.
   }
-  udp.UDPListen(dhcpServerPort, onDHCPMessage)
+  udp.UDPListen(dhcpServerPort, function(packet)
+    if(packet.udpProto == dhcpUDPProtocol) then
+      onDHCPMessage(packet)
+    end
+  end)
 end
 
 return dhcpServer

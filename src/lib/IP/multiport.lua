@@ -15,20 +15,22 @@ end
 
 function multiport.broadcast(packet, skipRegister)
   packet.targetMAC = "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF"
-  packet.targetIP = require("IP/IPUtil").util.fromUserFormat("FFFF:FFFF:FFFF:FFFF")
+  packet.targetIP = require("IP/IPUtil").fromUserFormat("FFFF:FFFF:FFFF:FFFF")
   if(not skipRegister) then
     require("IP.protocols.DHCP").registerIfNeeded()
   end
   subnet.broadcast(multiportPort, packet)
 end
 
-function multiport.requestMessageWithTimeout(packet, skipRegister, broadcast, timeout, attempts, eventCondition)
+function multiport.requestMessageWithTimeout(packet, skipRegister, broadcast, timeout, attempts, eventCondition, noSend)
   local tries = 1
   ::start::
-  if(broadcast) then
-    multiport.broadcast(packet, skipRegister)
-  else
-    multiport.send(packet, skipRegister)
+  if(not noSend) then
+    if(broadcast) then
+      multiport.broadcast(packet, skipRegister)
+    else
+      multiport.send(packet, skipRegister)
+    end
   end
   ::wait::
   local a, b, c, d, e, f = event.pullFiltered(timeout, function(name) return name == "multiport_message" or name == "interrupted" end)
@@ -49,16 +51,15 @@ function multiport.requestMessageWithTimeout(packet, skipRegister, broadcast, ti
   end
 end
 
-local function process(_, receiverMAC, c, targetPort, d, message)
+function multiport.process(_, receiverMAC, c, targetPort, d, message)
   if(targetPort == multiportPort) then
     local decodedPacket = serialization.unserialize(message)
     event.push("multiport_message", receiverMAC, c, decodedPacket.targetPort, d, message)
   end
 end
 
-local function setup()
-  local component = require("component")
-  component.modem.open(multiportPort)
+function multiport.setupModem(modem)
+  modem.open(multiportPort)
 end
 
-return {process = process, setup = setup, multiport = multiport, multiportPort = multiportPort}
+return multiport
