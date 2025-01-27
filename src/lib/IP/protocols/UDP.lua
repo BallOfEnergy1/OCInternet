@@ -2,7 +2,7 @@
 local multiport = require("IP.multiport")
 local serialization = require("serialization")
 local event  = require("event")
-local Packet = require("IP.packetClass")
+local Packet = require("IP.classes.PacketClass")
 local util   = require("IP.IPUtil")
 
 local udpProtocol = 4

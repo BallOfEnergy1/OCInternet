@@ -5,8 +5,8 @@ local udp = require("IP.protocols.UDP")
 
 local dhcp = {}
 
-local dhcpServerPort = 27
-local dhcpClientPort = 26
+local dhcpServerPort = 67
+local dhcpClientPort = 68
 local dhcpUDPProtocol = 1
 
 function dhcp.release()

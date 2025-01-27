@@ -49,21 +49,22 @@ function util.getID(IP)
 end
 
 local Modem = {
-  clientIP = nil,
-  subnetMask = nil,
-  defaultGateway = nil,
-  MAC = nil,
-  modem = nil,
+  clientIP = 0,
+  subnetMask = 0,
+  defaultGateway = 0,
+  MAC = "",
+  modem = {},
 }
 
 function Modem:new(clientIP, subnetMask, defaultGateway, MAC, modem)
-  local o = Modem
+  local o = {}
   setmetatable(o, self)
-  self.clientIP = clientIP
-  self.subnetMask = subnetMask
-  self.defaultGateway = defaultGateway
-  self.MAC  = MAC
-  self.modem   = modem
+  self.__index = self
+  o.clientIP = clientIP
+  o.subnetMask = subnetMask
+  o.defaultGateway = defaultGateway
+  o.MAC  = MAC
+  o.modem   = modem
   return o
 end
 
@@ -76,7 +77,7 @@ function util.setup()
       _G.IP.modems = {}
       local config = {}
       loadfile("/etc/IP.conf", "t", config)()
-      for addr in pairs(component.list("modem")) do
+      for addr in component.list("modem") do
         local modem = Modem:new(
           util.fromUserFormat(config.IP.staticIP),
           util.fromUserFormat(config.IP.staticSubnetMask),

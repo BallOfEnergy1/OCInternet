@@ -1,12 +1,12 @@
 local DHCP = require("IP.protocols.DHCP")
 local util = require("IP.IPUtil")
-local Packet = require("IP.packetClass")
+local Packet = require("IP.classes.PacketClass")
 local multiport = require("IP.multiport")
 local tableUtil = require("tableutil")
 local udp = require("IP.protocols.UDP")
 
-local dhcpServerPort = 27
-local dhcpClientPort = 26
+local dhcpServerPort = 67
+local dhcpClientPort = 68
 local dhcpUDPProtocol = 1
 
 local dhcpServer = {}

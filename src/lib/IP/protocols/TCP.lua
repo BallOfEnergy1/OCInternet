@@ -2,8 +2,8 @@
 local multiport = require("IP.multiport")
 local serialization = require("serialization")
 local event = require("event")
-local Packet = require("IP.packetClass")
-local util = require("IP.IPUtil")
+local Packet = require("IP.classes.PacketClass")
+local RingBuffer = require("IP.classes.RingBufferClass")
 
 local tcpProtocol = 5
 
@@ -18,11 +18,12 @@ local TCPHeader = {
 }
 
 function TCPHeader:new(flags, ackNum, seqNum)
-  local o = TCPHeader
+  local o = {}
   setmetatable(o, self)
-  self.flags = flags
-  self.ackNum = ackNum
-  self.seqNum = seqNum
+  self.__index = self
+  o.flags = flags
+  o.ackNum = ackNum
+  o.seqNum = seqNum
   return o
 end
 
@@ -36,7 +37,8 @@ local Session = {
   targetIP = nil,
   targetPort = nil,
   ackNum = 0x0,
-  seqNum = 0x0
+  seqNum = 0x0,
+  buffer = RingBuffer:new(127)
 }
 
 local function send(IP, port, payload, skipRegistration)
@@ -45,14 +47,15 @@ local function send(IP, port, payload, skipRegistration)
 end
 
 function Session:new(IP, port, seq, ack)
-  local o = Session
+  local o = {}
   setmetatable(o, self)
-  self.targetIP = IP
-  self.targetPort = port
-  self.ackNum = ack or 0
-  self.seqNum = seq or math.random(0xFFFFFFFF)
-  self.status = "CLOSE"
-  self.id = require("UUID").next()
+  self.__index = self
+  o.targetIP = IP
+  o.targetPort = port
+  o.ackNum = ack or 0
+  o.seqNum = seq or math.random(0xFFFFFFFF)
+  o.status = "CLOSE"
+  o.id = require("UUID").next()
   _G.TCP.sessions[self.id] = self
   event.listen("multiport_message", function(_, _, _, targetPort, _, message)
     if(_G.TCP.allowedPorts[targetPort] and serialization.unserialize(message).protocol == tcpProtocol) then
@@ -61,8 +64,12 @@ function Session:new(IP, port, seq, ack)
       end
       local decoded = serialization.unserialize(message)
       
+      if(decoded.tcp.flags == 0x00) then -- DATA
+        self:acceptData(decoded)
+      end
+      
       if(decoded.tcp.flags == 0x02) then -- RST
-        self:reset()
+        self:reset(true)
       end
       
       if(decoded.tcp.flags == 0x08) then -- FIN
@@ -110,7 +117,7 @@ function Session:acceptConnection(SYNPacket)
     self.targetIP,
     self.targetPort,
     {tcp = TCPHeader:new(0x05, self.ackNum, self.seqNum):build(), data = nil} -- SYN-ACK
-  ), false, false, 5, 5, function(_, _, _, targetPort, _, message) return targetPort == self.targetPort and serialization.unserialize(message).protocol == tcpProtocol end)
+  ):build(), false, false, 5, 5, function(_, _, _, targetPort, _, message) return targetPort == self.targetPort and serialization.unserialize(message).protocol == tcpProtocol end)
   
   if(message == nil and code == -1) then
     self.status = "CLOSE"
@@ -143,7 +150,7 @@ function Session:acceptFinalization(FINPacket)
     self.targetIP,
     self.targetPort,
     {tcp = TCPHeader:new(0x05, self.ackNum, self.seqNum):build(), data = nil} -- SYN-ACK
-  ), false, false, 5, 5, function(_, _, _, targetPort, _, message) return targetPort == self.targetPort and serialization.unserialize(message).protocol == tcpProtocol end)
+  ):build(), false, false, 5, 5, function(_, _, _, targetPort, _, message) return targetPort == self.targetPort and serialization.unserialize(message).protocol == tcpProtocol end)
   
   if(message == nil and code == -1) then
     self.status = "CLOSE"
@@ -166,6 +173,17 @@ function Session:acceptFinalization(FINPacket)
   end
 end
 
+-- Assumes there's already data waiting.
+function Session:acceptData(DATAPacket)
+  tcp.setup()
+  if(self.status ~= "ESTABLISHED") then
+    self:reset()
+  end
+  self.buffer:writeData(DATAPacket.data.data)
+  self.ackNum = self.ackNum + #serialization.serialize(DATAPacket.data.data)
+  send(self.targetIP, self.targetPort, {tcp = TCPHeader:new(0x1, self.ackNum, self.seqNum):build(), data = nil}, false) --  Send ACK
+end
+
 function Session:start()
   tcp.setup()
   if(self.status ~= "CLOSE") then
@@ -181,12 +199,17 @@ function Session:start()
     self.targetIP,
     self.targetPort,
     {tcp = TCPHeader:new(0x04, 0, self.seqNum):build(), data = nil} -- SYN
-  ), false, false, 5, 5, function(_, _, _, targetPort, _, message) return targetPort == self.targetPort and serialization.unserialize(message).protocol == tcpProtocol end)
+  ):build(), false, false, 5, 5, function(_, _, _, targetPort, _, message) return targetPort == self.targetPort and serialization.unserialize(message).protocol == tcpProtocol end)
   
   if(message == nil and code == -1) then
-    send(self.targetIP, self.targetPort, {tcp = TCPHeader:new(0x02, self.ackNum, self.seqNum):build(), data = nil}) -- RST
+    self:reset()
     self.status = "CLOSE"
     return nil, code
+  end
+  
+  if(message == nil) then
+    self:reset()
+    return false, "Connection closed; timed out."
   end
   
   local decoded = serialization.unserialize(message)
@@ -208,9 +231,12 @@ function Session:start()
   return false
 end
 
-function Session:reset()
-  send(self.targetIP, self.targetPort, {tcp = TCPHeader:new(0x02, self.ackNum, self.seqNum):build(), data = nil}) -- RST
-  self.status = nil
+function Session:reset(sentByOther)
+  if(not sentByOther) then
+    send(self.targetIP, self.targetPort, {tcp = TCPHeader:new(0x02, self.ackNum, self.seqNum):build(), data = nil}) -- RST
+  end
+  self.status = "CLOSE"
+  _G.TCP.sessions[self.id] = nil
 end
 
 function Session:stop()
@@ -220,7 +246,7 @@ function Session:stop()
     self.targetIP,
     self.targetPort,
     {tcp = TCPHeader:new(0x08, self.ackNum, self.seqNum):build(), data = nil} -- FIN
-  ), false, false, 5, 5, function(_, _, _, targetPort, _, receivedMessage) return targetPort == self.targetPort and serialization.unserialize(receivedMessage).protocol == tcpProtocol end)
+  ):build(), false, false, 5, 5, function(_, _, _, targetPort, _, receivedMessage) return targetPort == self.targetPort and serialization.unserialize(receivedMessage).protocol == tcpProtocol end)
   
   if(message == nil and code == -1) then
     self:reset()
@@ -245,13 +271,13 @@ function Session:stop()
   ), false, false, 5, 5, function(_, _, _, targetPort, _, receivedMessage) return targetPort == self.targetPort and serialization.unserialize(receivedMessage).protocol == tcpProtocol end, true)
   
   if(message == nil and code == -1) then
-    send(self.targetIP, self.targetPort, {tcp = TCPHeader:new(0x02, self.ackNum, self.seqNum):build(), data = nil}) -- RST
+    self:reset()
     self.status = "CLOSE"
     return nil, code
   end
   
   if(message == nil) then
-    send(self.targetIP, self.targetPort, {tcp = TCPHeader:new(0x02, self.ackNum, self.seqNum):build(), data = nil}) -- RST
+    self:reset()
     return false, "Connection closed; timed out."
   end
   
@@ -264,26 +290,32 @@ function Session:stop()
   send(self.targetIP, self.targetPort, {tcp = TCPHeader:new(0x1, self.ackNum, self.seqNum):build(), data = nil}, false) --  Send ACK
   self.ackNum = self.ackNum + 1
   self.status = "TIME-WAIT"
-  event.timer(10, function() self.status = "CLOSE" end)
+  event.timer(10, function()
+    self.status = "CLOSE"
+    self:reset()
+  end)
 end
 
 function Session:send(payload)
+  if(self.status ~= "ESTABLISHED") then
+    self:reset()
+  end
   ::start::
   local message, code = multiport.requestMessageWithTimeout(Packet:new(nil,
     tcpProtocol,
     self.targetIP,
     self.targetPort,
     {tcp = TCPHeader:new(0x00, self.ackNum, self.seqNum):build(), data = payload} -- DATA
-  ), false, false, 5, 5, function(_, _, _, targetPort, _, message) return targetPort == self.targetPort and serialization.unserialize(message).protocol == tcpProtocol end)
+  ):build(), false, false, 5, 5, function(_, _, _, targetPort, _, message) return targetPort == self.targetPort and serialization.unserialize(message).protocol == tcpProtocol end)
   
   if(message == nil and code == -1) then
-    send(self.targetIP, self.targetPort, {tcp = TCPHeader:new(0x02, self.ackNum, self.seqNum):build(), data = nil}) -- RST
+    self:reset()
     self.status = "CLOSE"
     return nil, code
   end
   
   if(message == nil) then
-    send(self.targetIP, self.targetPort, {tcp = TCPHeader:new(0x02, self.ackNum, self.seqNum):build(), data = nil}) -- RST
+    self:reset()
     return false, "Connection closed; timed out."
   end
   
@@ -309,18 +341,21 @@ function Session:attachListener(callback)
   end)
 end
 
-function Session:pull(sessionID, timeout, callback)
-  if(_G.TCP.sessions[sessionID] == nil) then
-    _G.IP.logger.write("#[TCP] Attempted to pull from an invalid session.")
-    return nil, "Session closed."
-  end
-  local _, _, _, targetPort, _, message = event.pull(timeout or math.huge, "multiport_message")
-  if(targetPort == _G.TCP.sessions[sessionID] and serialization.unserialize(message).protocol == tcpProtocol) then
-    if(not callback) then
-      return serialization.unserialize(message)
+function Session:pull(timeout, callback)
+  timeout = timeout or math.huge
+  local start = require("computer").uptime()
+  local time = start
+  repeat
+    if(#self.buffer > 0) then
+      local output = self.buffer:readData()
+      if(not callback) then
+        return output
+      end
+      return callback(output)
     end
-    return callback(serialization.unserialize(message))
-  end
+    coroutine.yield()
+    time = require("computer").uptime()
+  until time - (timeout + start) > 0
 end
 
 function tcp.allowConnection(port)
@@ -337,11 +372,7 @@ function tcp.connect(IP, port)
   tcp.setup()
   local session = Session:new(IP, port)
   session:start()
-  return session.id
-end
-
-function tcp.disconnect(id)
-  _G.TCP.sessions[id]:stop()
+  return session
 end
 
 return tcp

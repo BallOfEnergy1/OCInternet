@@ -2,7 +2,7 @@
 local multiport = require("IP.multiport")
 local serialization = require("serialization")
 local event = require("event")
-local Packet = require("IP.packetClass")
+local Packet = require("IP.classes.PacketClass")
 
 local icmpPort = 0
 local icmpProtocol = 1

@@ -14,23 +14,24 @@ function Packet:new(_, protocol, targetIP, targetPort, data, MAC, noReg)
   if(not noReg) then
     require("IP.protocols.DHCP").registerIfNeeded()
   end
-  local o = Packet
+  local o = {}
   setmetatable(o, self)
-  self.protocol = protocol
+  self.__index = self
+  o.protocol = protocol
   local dynPort = math.random(49152, 65535) -- Random dynamic port.
-  self.senderPort = dynPort
-  self.targetPort = targetPort
+  o.senderPort = dynPort
+  o.targetPort = targetPort
   local broadcast = require("IP.IPUtil").fromUserFormat("FFFF:FFFF:FFFF:FFFF")
   if(targetIP == broadcast) then
-    self.targetMAC = broadcast
+    o.targetMAC = broadcast
   else
-    self.targetMAC = MAC or require("IP.protocols.ARP").resolve(targetIP)
+    o.targetMAC = MAC or require("IP.protocols.ARP").resolve(targetIP)
   end
   local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
-  self.senderMAC  = _G.IP.modems[addr].MAC
-  self.senderIP   = _G.IP.modems[addr].clientIP
-  self.targetIP   = targetIP
-  self.data       = data
+  o.senderMAC  = _G.IP.modems[addr].MAC
+  o.senderIP   = _G.IP.modems[addr].clientIP
+  o.targetIP   = targetIP
+  o.data       = data
   return o
 end
 
