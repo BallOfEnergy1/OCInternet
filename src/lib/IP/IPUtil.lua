@@ -21,7 +21,7 @@ function util.toUserFormat(dec)
     mask = mask << 16
   end
   endingString = util.toHex((dec & mask) >> 48) .. endingString
-  return endingString
+  return string.upper(endingString)
 end
 
 function util.fromUserFormat(IP)

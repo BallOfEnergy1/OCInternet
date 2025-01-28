@@ -19,9 +19,11 @@ if(MTU > maxMTU) then
 end
 
 local function fragmentPacket(modem, port, packet, MAC)
-  if(#serialization.serialize(packet) > MTU) then
-    packet.seq = math.random(0xFFFFFFFF)
-    local packetSize = #serialization.serialize(packet)
+  packet.seq = math.random(0xFFFFFFFF)
+  packet.endSeq = false
+  local serialized = serialization.serialize(packet)
+  if(#serialized > MTU) then
+    local packetSize = #serialized
     local dataToSend = serialization.serialize(packet.data)
     local headerSize = packetSize - #dataToSend + 2 -- Packet overhead.
     local adjustedMTU = MTU
@@ -43,16 +45,15 @@ local function fragmentPacket(modem, port, packet, MAC)
         modem.broadcast(port, serialization.serialize(packetCopy))
       end
       dataToSend = dataToSend:sub(adjustedMTU - headerSize)
+      if(#dataToSend < adjustedMTU) then
+        packetCopy.endSeq = true -- loop over to last packet.
+      end
       seq = seq + 1
     end
-    packetCopy.data = nil
-    packetCopy.seq = seq
-    if(MAC) then
-      modem.send(MAC, port, serialization.serialize(packetCopy))
-    else
-      modem.broadcast(port, serialization.serialize(packetCopy))
-    end
+    return
   end
+  packet.seq = nil
+  packet.endSeq = nil
   if(MAC) then
     modem.send(MAC, port, serialization.serialize(packet))
   else
@@ -96,6 +97,7 @@ function fragmentation.receive(_, receiverMAC, c, targetPort, d, message)
     _G.FRAG[addr].packetCache[packet.senderMAC] = nil
     return
   end
+  
   if(not packet.seq) then
     require("IP.subnet").receive(_, receiverMAC, c, targetPort, d, message)
   else
@@ -105,10 +107,13 @@ function fragmentation.receive(_, receiverMAC, c, targetPort, d, message)
     if(not _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort]) then
       _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort] = {}
     end
-    if(_G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].lastSeq == packet.seq) then
+    local data = _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].data or ""
+    _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].data = data .. (packet.data or "")
+    if(packet.endSeq) then
       -- OOH RAH
       -- Last packet in sequence.
-      if(serialization.unserialize(_G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].data) == nil) then
+      local unserialized = serialization.unserialize(_G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].data)
+      if(unserialized == nil) then
         -- Likely corrupted.
         _G.IP.logger.write("Invalid deserialization on packet.")
         _G.IP.logger.write("Data: " .. _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].data)
@@ -120,7 +125,7 @@ function fragmentation.receive(_, receiverMAC, c, targetPort, d, message)
         return
       end
       local newPacket = packet
-      newPacket.data = serialization.unserialize(_G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].data)
+      newPacket.data = unserialized
       require("IP.subnet").receive(_, receiverMAC, c, targetPort, d, serialization.serialize(newPacket))
       _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort] = nil
       if(#_G.FRAG[addr].packetCache[packet.senderMAC] == 0) then
@@ -128,8 +133,6 @@ function fragmentation.receive(_, receiverMAC, c, targetPort, d, message)
       end
       return -- get out!
     end
-    local data = _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].data or ""
-    _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].data = data .. (packet.data or "")
     if(_G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].lastSeq == nil) then
       _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].lastSeq = packet.seq
     elseif(packet.seq - 1 ~= _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].lastSeq) then

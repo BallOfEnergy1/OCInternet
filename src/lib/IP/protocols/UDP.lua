@@ -30,6 +30,9 @@ end
 
 function udp.UDPIgnore(port)
   udp.setup()
+  if(not _G.UDP.listeners[port]) then
+    return false
+  end
   local success = event.ignore("multiport_message", _G.UDP.listeners[port])
   _G.UDP.listeners[port] = nil
   return success

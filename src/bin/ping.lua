@@ -74,7 +74,7 @@ if(args[1] ~= nil and type(args[1]) == "string") then -- Take as IP.
         table.insert(pings, {received=false})
       else
         uptime = require("computer").uptime()
-        print("Reply from " .. args[1] .. ": bytes=" .. payloadSize .. " time=" .. uptime - pcTime)
+        print("Reply from " .. args[1] .. ": bytes=" .. payloadSize .. " time=" .. math.floor((uptime - pcTime) * 100)/100)
         table.insert(pings, {time=uptime - pcTime, received=true})
       end
       if(i ~= count) then

@@ -45,17 +45,21 @@ do
     i = i + 1
   end
   local num = io.read()
-  if(not tonumber(num) or tonumber(num) > i - 1) then
+  if((not tonumber(num) or tonumber(num) > i - 1) and tonumber(num) ~= 0) then
     print("Try again.")
     goto select
   end
-  local j = 1
-  for addr in pairs(component.list("modem")) do
-    if(tonumber(num) == j) then
-      externalModemAddr = addr
-      break
+  if(tonumber(num) == 0) then
+    print("Skipping modem...")
+  else
+    local j = 1
+    for addr in pairs(component.list("modem")) do
+      if(tonumber(num) == j) then
+        externalModemAddr = addr
+        break
+      end
+      j = j + 1
     end
-    j = j + 1
   end
 end
 local internalModemAddr
@@ -68,17 +72,21 @@ do
     i = i + 1
   end
   local num = io.read()
-  if(not tonumber(num) or tonumber(num) > i - 1) then
+  if((not tonumber(num) or tonumber(num) > i - 1) and tonumber(num) ~= 0) then
     print("Try again.")
     goto select
   end
-  local j = 1
-  for addr in pairs(component.list("modem")) do
-    if(tonumber(num) == j) then
-      internalModemAddr = addr
-      break
+  if(tonumber(num) == 0) then
+    print("Skipping modem...")
+  else
+    local j = 1
+    for addr in pairs(component.list("modem")) do
+      if(tonumber(num) == j) then
+        internalModemAddr = addr
+        break
+      end
+      j = j + 1
     end
-    j = j + 1
   end
 end
 
