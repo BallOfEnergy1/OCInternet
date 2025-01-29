@@ -9,7 +9,7 @@ local RingBuffer = {
 function RingBuffer:new(loopRange)
   local o = RingBuffer
   setmetatable(o, self)
-  self.__index = self
+  --self.__index = self
   o.loopRange = loopRange
   return o
 end
