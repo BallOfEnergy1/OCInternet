@@ -51,7 +51,7 @@ function util.fromUserFormat(IP)
   end
   local segments = {}
   for str in formatted:gmatch("([^:]+)") do
-    for i = 1, 4 - #str do
+    for _ = 1, 4 - #str do
       str = "0" .. str
     end
     if(#str > 4) then
