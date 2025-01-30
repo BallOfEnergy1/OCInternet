@@ -32,14 +32,14 @@ function TCPHeader:build()
 end
 
 local Session = {
-  id = nil,
-  status = nil,
-  targetIP = nil,
-  targetPort = nil,
+  id = "00000000-0000-0000-0000-000000000000",
+  status = "CLOSE",
+  targetIP = 0x0,
+  targetPort = 0x0,
   ackNum = 0x0,
   seqNum = 0x0,
   buffer = RingBuffer:new(127),
-  listenerID = nil
+  listenerID = 0x0
 }
 
 local function send(IP, port, payload, skipRegistration)
@@ -56,9 +56,10 @@ function Session:new(IP, port, seq, ack)
   o.ackNum = ack or 0
   o.seqNum = seq or math.random(0xFFFFFFFF)
   o.status = "CLOSE"
-  o.id = require("UUID").next()
-  _G.TCP.sessions[o.id] = self
-  self.listenerID = event.listen("multiport_message", function(_, _, _, targetPort, _, message)
+  local id = require("UUID").next()
+  o.id = id
+  _G.TCP.sessions[id] = o
+  o.listenerID = event.listen("multiport_message", function(_, _, _, targetPort, _, message)
     local decoded = serialization.unserialize(message)
     if(_G.TCP.allowedPorts[targetPort] and decoded.protocol == tcpProtocol) then
       

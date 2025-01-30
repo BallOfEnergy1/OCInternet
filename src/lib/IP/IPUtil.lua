@@ -25,11 +25,41 @@ function util.toUserFormat(dec)
 end
 
 function util.fromUserFormat(IP)
-  local firstQuartetIP  = IP:sub(1, 4)
-  local secondQuartetIP = IP:sub(6, 9)
-  local thirdQuartetIP  = IP:sub(11, 14)
-  local fourthQuartetIP = IP:sub(16, 19)
-  local parsedIP = tonumber(firstQuartetIP .. secondQuartetIP .. thirdQuartetIP .. fourthQuartetIP, 16)
+  local formatted
+  if(string.find(IP, "::")) then
+    local s, e = string.find(IP, "::")
+    local prefix = IP:sub(0, s - 1)
+    local suffix = IP:sub(e, #IP)
+    local t = 1
+    while t < 4-1 do
+      t = 1
+      for _ in (prefix .. suffix):gmatch(":") do
+        t = t + 1
+      end
+      prefix = prefix .. ":0"
+    end
+    formatted = prefix .. suffix
+    if(formatted:sub(0, 1) == ":") then
+      formatted = "0" .. formatted
+    end
+    if(formatted:sub(#formatted) == ":") then
+      formatted = formatted .. "0"
+    end
+  end
+  if(formatted == nil) then
+    formatted = IP
+  end
+  local segments = {}
+  for str in formatted:gmatch("([^:]+)") do
+    for i = 1, 4 - #str do
+      str = "0" .. str
+    end
+    if(#str > 4) then
+      return nil, "Invalid input."
+    end
+    table.insert(segments, str)
+  end
+  local parsedIP = tonumber(segments[1] .. segments[2] .. segments[3] .. segments[4], 16)
   return parsedIP
 end
 
