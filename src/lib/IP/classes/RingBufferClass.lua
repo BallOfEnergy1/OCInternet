@@ -51,4 +51,10 @@ function RingBuffer:checkOverrun()
   return false
 end
 
+function RingBuffer:clear()
+  self.data = {}
+  self.writeIndex = 0
+  self.readIndex = 0
+end
+
 return RingBuffer

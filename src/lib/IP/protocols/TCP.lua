@@ -72,7 +72,8 @@ function Session:new(IP, port, seq, ack)
       end
       
       if(decoded.data.tcp.flags == 0x08) then -- FIN
-        self:acceptFinalization(decoded)
+        event.cancel(o.listenerID)
+        self:acceptFinalization()
       end
     end
   end)
@@ -148,36 +149,45 @@ function Session:acceptConnection(SYNPacket)
 end
 
 -- Assumes there's already a finalization waiting.
-function Session:acceptFinalization(FINPacket)
+function Session:acceptFinalization()
+  print(1)
   tcp.setup()
-  self.ackNum = FINPacket.data.tcp.seqNum + 1
-  self.seqNum = math.random(0xFFFFFFFF)
-  local message, code = multiport.requestMessageWithTimeout(Packet:new(nil,
-    tcpProtocol,
-    self.targetIP,
-    self.targetPort,
-    {tcp = TCPHeader:new(0x05, self.ackNum, self.seqNum):build(), data = nil} -- SYN-ACK
-  ):build(), false, false, 5, 5, function(_, _, _, targetPort, _, message) return targetPort == self.targetPort and serialization.unserialize(message).protocol == tcpProtocol end)
+  self.status = "CLOSE-WAIT"
+  send(self.targetIP, self.targetPort, {tcp = TCPHeader:new(0x01, self.ackNum, self.seqNum):build(), data = nil})
+  print(2)
+  local limit = 60
   
+  for _ = 1, limit do
+    if(not self.buffer:checkHasData()) then
+      send(self.targetIP, self.targetPort, {tcp = TCPHeader:new(0x08, self.ackNum, self.seqNum):build(), data = nil})
+      break
+    end
+    os.sleep(0.25)
+  end
+  print(3)
+  
+  self.status = "LAST-ACK"
+  local message, code = multiport.requestMessageWithTimeout(nil, false, false, 5, 5, function(_, _, _, targetPort, _, receivedMessage) return targetPort == self.targetPort and serialization.unserialize(receivedMessage).protocol == tcpProtocol end, true)
   if(message == nil and code == -1) then
-    self.status = "CLOSE"
+    self:reset()
     return nil, code
   end
-  
+  print(4)
+  if(message == nil) then
+    self:reset()
+    return false, "Connection closed; timed out."
+  end
   local decoded = serialization.unserialize(message)
   local data = decoded.data
-  if(decoded ~= nil and decoded.targetPort == self.targetPort) then
-    if(data.tcp.flags ~= 0x01) then -- ACK
-      self:reset()
-      return
-    else
-      if(data.tcp.ackNum == self.seqNum + 1) then -- check ACK num.
-        self.status = "ESTABLISHED"
-        self.seqNum = self.seqNum + 1
-        return true
-      end
-    end
+  if(data.tcp.flags ~= 0x01 or data.tcp.ackNum ~= self.seqNum + 1) then -- ACK
+    self:reset()
+    return
   end
+  print(5)
+  self.status = "CLOSE"
+  self.buffer:clear()
+  event.cancel(self.listenerID)
+  _G.TCP.sessions[self.id] = nil
 end
 
 -- Assumes there's already data waiting.
@@ -248,6 +258,7 @@ function Session:reset(sentByOther)
 end
 
 function Session:stop()
+  print(1)
   self.status = "FIN-WAIT-1"
   local message, code = multiport.requestMessageWithTimeout(Packet:new(nil,
     tcpProtocol,
@@ -255,7 +266,7 @@ function Session:stop()
     self.targetPort,
     {tcp = TCPHeader:new(0x08, self.ackNum, self.seqNum):build(), data = nil} -- FIN
   ):build(), false, false, 5, 5, function(_, _, _, targetPort, _, receivedMessage) return targetPort == self.targetPort and serialization.unserialize(receivedMessage).protocol == tcpProtocol end)
-  
+  print(2)
   if(message == nil and code == -1) then
     self:reset()
     self.status = "CLOSE"
@@ -266,18 +277,18 @@ function Session:stop()
     self:reset()
     return false, "Connection closed; timed out."
   end
-  
+  print(3)
   local decoded = serialization.unserialize(message)
   local data = decoded.data
   if(data.tcp.flags ~= 0x01 or data.tcp.ackNum ~= self.seqNum + 1) then -- ACK
     self:reset()
     return
   end
+  print(4)
   self.seqNum = self.seqNum + 1
   self.status = "FIN-WAIT-2"
-  message, code = multiport.requestMessageWithTimeout(Packet:new(nil, nil, nil, nil, nil
-  ), false, false, 5, 5, function(_, _, _, targetPort, _, receivedMessage) return targetPort == self.targetPort and serialization.unserialize(receivedMessage).protocol == tcpProtocol end, true)
-  
+  message, code = multiport.requestMessageWithTimeout(nil, false, false, 5, 5, function(_, _, _, targetPort, _, receivedMessage) return targetPort == self.targetPort and serialization.unserialize(receivedMessage).protocol == tcpProtocol end, true)
+  print(5)
   if(message == nil and code == -1) then
     self:reset()
     self.status = "CLOSE"
@@ -288,19 +299,23 @@ function Session:stop()
     self:reset()
     return false, "Connection closed; timed out."
   end
-  
+  print(6)
   decoded = serialization.unserialize(message)
   data = decoded.data
   if(data.tcp.flags ~= 0x08 or data.tcp.ackNum ~= self.seqNum + 1) then -- FIN
     self:reset()
     return
   end
+  print(7)
   send(self.targetIP, self.targetPort, {tcp = TCPHeader:new(0x1, self.ackNum, self.seqNum):build(), data = nil}, false) --  Send ACK
   self.ackNum = self.ackNum + 1
   self.status = "TIME-WAIT"
   event.timer(10, function()
     self.status = "CLOSE"
-    self:reset()
+    self.buffer:clear()
+    event.cancel(self.listenerID)
+    _G.TCP.sessions[self.id] = nil
+    print(8)
   end)
 end
 
