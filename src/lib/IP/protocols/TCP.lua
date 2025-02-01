@@ -152,8 +152,8 @@ end
 function Session:acceptFinalization()
   tcp.setup()
   self.status = "CLOSE-WAIT"
-  self.ackNum = self.ackNum + 1
   send(self.targetIP, self.targetPort, {tcp = TCPHeader:new(0x01, self.ackNum, self.seqNum):build(), data = nil})
+  self.ackNum = self.ackNum + 1
   local limit = 60
   
   for _ = 1, limit do

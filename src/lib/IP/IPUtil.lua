@@ -103,7 +103,7 @@ function util.setup()
   if(not _G.IP or not _G.IP.isInitialized) then
     _G.IP = {}
     do
-      _G.IP.logger = logutil.initLogger("IPv4.1", "/var/ip/ip.log")
+      _G.IP.logger = logutil.initLogger("IPv5", "/var/ip/ip.log")
       _G.IP.modems = {}
       local config = {}
       loadfile("/etc/IP.conf", "t", config)()
