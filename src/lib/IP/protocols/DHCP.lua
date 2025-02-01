@@ -15,13 +15,11 @@ function dhcp.release()
   udp.broadcast(dhcpServerPort, 0x10, dhcpUDPProtocol, true)
 end
 
-function dhcp.setup()
+function dhcp.setup(config)
   if(not _G.DHCP or not _G.DHCP.isInitialized) then
     _G.DHCP = {}
     do
       _G.DHCP.DHCPRegisteredModems = {}
-      local config = {}
-      loadfile("/etc/IP.conf", "t", config)()
       _G.DHCP.static         = config.DHCP.static
     end
     udp.UDPListen(dhcpClientPort, function(receivedPacket)
@@ -44,7 +42,7 @@ function dhcp.registerIfNeeded()
     local message, code
     for _ = 1, attempts do
       udp.broadcast(dhcpServerPort, nil, dhcpUDPProtocol, true)
-      message, code = udp.pullUDP(dhcpClientPort, 5)
+      message, code = udp.pullUDP(dhcpClientPort, 2)
       if(message and message.udpProto == dhcpUDPProtocol) then
         break
       end

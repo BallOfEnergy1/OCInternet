@@ -25,6 +25,8 @@ end
 function multiport.requestMessageWithTimeout(packet, skipRegister, broadcast, timeout, attempts, eventCondition, noSend)
   local tries = 1
   ::start::
+  local startingTime = require("computer").uptime()
+  local globalTimeout = startingTime + timeout
   if(not noSend) then
     if(broadcast) then
       multiport.broadcast(packet, skipRegister)
@@ -33,7 +35,7 @@ function multiport.requestMessageWithTimeout(packet, skipRegister, broadcast, ti
     end
   end
   ::wait::
-  local a, b, c, d, e, f = event.pullFiltered(timeout, function(name) return name == "multiport_message" or name == "interrupted" end)
+  local a, b, c, d, e, f = event.pull(timeout)
   if(a == "interrupted") then
     return nil, -1
   end
@@ -46,9 +48,13 @@ function multiport.requestMessageWithTimeout(packet, skipRegister, broadcast, ti
   end
   if(eventCondition(a, b, c, d, e, f)) then
     return f
-  else
-    goto wait
   end
+  if(a ~= "multiport_message") then
+    if(require("computer").uptime() > globalTimeout) then
+      return nil
+    end
+  end
+  goto wait
 end
 
 function multiport.process(_, receiverMAC, c, targetPort, d, message)

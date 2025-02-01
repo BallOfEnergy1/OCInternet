@@ -98,15 +98,15 @@ function Modem:new(clientIP, subnetMask, defaultGateway, MAC, modem)
   return o
 end
 
-function util.setup()
-  require("filesystem").makeDirectory("/var/ip") -- TODO get rid of this bs
+function util.setup(config)
   if(not _G.IP or not _G.IP.isInitialized) then
+    local multiport = require("IP.multiport")
+    local packetFrag = require("IP.packetFrag")
+    require("filesystem").makeDirectory("/var/ip") -- TODO get rid of this bs
     _G.IP = {}
     do
       _G.IP.logger = logutil.initLogger("IPv5", "/var/ip/ip.log")
       _G.IP.modems = {}
-      local config = {}
-      loadfile("/etc/IP.conf", "t", config)()
       for addr in component.list("modem") do
         local modem = Modem:new(
           util.fromUserFormat(config.IP.staticIP),
@@ -115,14 +115,14 @@ function util.setup()
           addr,
           component.proxy(addr)
         )
-        require("IP.multiport").setupModem(modem.modem)
+        multiport.setupModem(modem.modem)
         _G.IP.modems[addr] = modem
         if(_G.IP.primaryModem == nil) then
           _G.IP.primaryModem = modem
         end
       end
     end
-    require("IP.packetFrag").setup()
+    packetFrag.setup()
     _G.IP.isInitialized = true
   end
 end

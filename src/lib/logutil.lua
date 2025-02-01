@@ -21,15 +21,27 @@ local function getTimestamp(name)
   end
 end
 
+local function checkOpenHandles()
+  for _, v in ipairs(runningLoggers) do
+    if(v.closeTimer ~= 0) then
+      if(require("computer").uptime() > v.closeTimer) then
+        v.closeTimer = 0
+        v.handle:close()
+        v.handle = nil
+      end
+    end
+  end
+end
+
 local function log(name, format, ocelot, ...)
-  local handle = io.open(runningLoggers[name].filePath, "a")
+  local handle = runningLoggers[name].handle or io.open(runningLoggers[name].filePath, "a")
   if(runningLoggers[name].hasOcelot and (ocelot or ocelot == nil)) then
     runningLoggers[name].ocelotProxy.log(string.format("[%s]|[%s]: " .. format .. "\n", getTimestamp(name), name, ...))
   end
   if(not ocelot --[[ technically this also will be true for nil... ]]) then
     handle:write(string.format("[%s]|[%s]: " .. format .. "\n", getTimestamp(name), name, ...))
   end
-  handle:close()
+  runningLoggers[name].closeTimer = require("computer").uptime() + 1
 end
 
 -- Special routine to check for an ocelot card/block.
@@ -80,7 +92,9 @@ local function initLoggerInternal(name, filePath)
   end
   runningLoggers[name] = {
     name = name,
-    filePath = filePath
+    filePath = filePath,
+    closeTimer = require("computer").uptime() + 1,
+    handle = io.open(filePath, "a")
   }
   if(not isInitialized) then
     log(name, "Logutil version %s initialized at %s.", false, version, runningLoggers[name].filePath)
@@ -155,6 +169,8 @@ local function initLogger(name, filePath)
     log("logutil", "Starting event listeners... (2/2)")
     event.ignore("component_removed", checkComponents)
     event.listen("component_removed", checkComponents)
+    log("logutil", "Starting event timer... (1/1)")
+    event.timer(1, checkOpenHandles, math.huge)
   end
   return initLoggerInternal(name, filePath or defaultLogPath)
 end

@@ -16,21 +16,24 @@ print("Starting libraries...")
 
 _G.DHCP.static = true
 
+local config = {}
+loadfile("/etc/IP.conf", "t", config)()
+
 local IPUtil = require("IP.IPUtil")
 print(">IPUtil begin")
-IPUtil.setup()
+IPUtil.setup(config)
 print(">IPUtil end")
 local DHCP = require("IP.protocols.DHCP")
 print(">DHCP begin")
-DHCP.setup()
+DHCP.setup(config)
 print(">DHCP end")
 local ARP = require("IP.protocols.ARP")
 print(">ARP begin")
-ARP.setup()
+ARP.setup(config)
 print(">ARP end")
 local ICMP = require("IP.protocols.ICMP")
 print(">ICMP begin")
-ICMP.setup()
+ICMP.setup(config)
 print(">ICMP end")
 
 print("Libraries started.")
@@ -111,7 +114,7 @@ print("No default gateway found.")
 
 print("Starting DHCP server...")
 local DHCPServer = require("IP.protocols.DHCPServer")
-DHCPServer.setup()
+DHCPServer.setup(config)
 print("DHCP server started.")
 
 print("Setting IP...")

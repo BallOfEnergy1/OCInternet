@@ -66,13 +66,11 @@ function dhcpServer.removeReservedIP(MAC)
   _G.DHCP.userReservedIPs[MAC] = nil
 end
 
-function dhcpServer.setup()
-  DHCP.setup()
+function dhcpServer.setup(config)
+  DHCP.setup(config)
   local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
   _G.DHCP.providedSubnetMask = _G.IP.modems[addr].subnetMask
   _G.DHCP.subnetIdentifier = util.getSubnet(_G.IP.modems[addr].clientIP)
-  local config = {}
-  loadfile("/etc/IP.conf", "t", config)()
   _G.DHCP.IPIndex = config.DHCPServer.startingIndex
   _G.DHCP.userReservedIPs = config.DHCPServer.reservedIPs
   _G.DHCP.allRegisteredMACs = {}
