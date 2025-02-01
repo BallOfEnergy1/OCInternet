@@ -320,7 +320,6 @@ function Session:send(payload)
     self.targetPort,
     {tcp = TCPHeader:new(0x00, self.ackNum, self.seqNum):build(), data = payload} -- DATA
   ):build(), false, false, 5, 5, function(_, _, _, targetPort, _, message) return targetPort == self.targetPort and serialization.unserialize(message).protocol == tcpProtocol end)
-  
   if(message == nil and code == -1) then
     self:reset()
     self.status = "CLOSE"
@@ -331,7 +330,6 @@ function Session:send(payload)
     self:reset()
     return false, "Connection closed; timed out."
   end
-  
   local decoded = serialization.unserialize(message)
   local data = decoded.data
   if(data.tcp.flags ~= 0x01) then -- ACK

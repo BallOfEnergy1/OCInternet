@@ -107,7 +107,8 @@ function util.setup(config)
     do
       _G.IP.logger = logutil.initLogger("IPv5", "/var/ip/ip.log")
       _G.IP.modems = {}
-      for addr in component.list("modem") do
+      local list = component.list("modem")
+      for addr in list do
         local modem = Modem:new(
           util.fromUserFormat(config.IP.staticIP),
           util.fromUserFormat(config.IP.staticSubnetMask),

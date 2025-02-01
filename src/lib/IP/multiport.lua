@@ -36,6 +36,15 @@ function multiport.requestMessageWithTimeout(packet, skipRegister, broadcast, ti
   end
   ::wait::
   local a, b, c, d, e, f = event.pull(timeout)
+  if(a ~= "multiport_message" and a ~= "interrupted") then
+    if(require("computer").uptime() > globalTimeout) then
+      tries = tries + 1
+      if(tries > attempts) then
+        return nil
+      end
+      goto start
+    end
+  end
   if(a == "interrupted") then
     return nil, -1
   end
@@ -48,11 +57,6 @@ function multiport.requestMessageWithTimeout(packet, skipRegister, broadcast, ti
   end
   if(eventCondition(a, b, c, d, e, f)) then
     return f
-  end
-  if(a ~= "multiport_message") then
-    if(require("computer").uptime() > globalTimeout) then
-      return nil
-    end
   end
   goto wait
 end

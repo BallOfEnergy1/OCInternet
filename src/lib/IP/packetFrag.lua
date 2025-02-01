@@ -100,46 +100,46 @@ function fragmentation.receive(_, receiverMAC, c, targetPort, d, message)
   
   if(not packet.seq) then
     require("IP.subnet").receive(_, receiverMAC, c, targetPort, d, message)
-  else
-    if(not _G.FRAG[addr].packetCache[packet.senderMAC]) then
-      _G.FRAG[addr].packetCache[packet.senderMAC] = {}
-    end
-    if(not _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort]) then
-      _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort] = {}
-    end
-    local data = _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].data or ""
-    _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].data = data .. (packet.data or "")
-    if(packet.endSeq) then
-      -- OOH RAH
-      -- Last packet in sequence.
-      local unserialized = serialization.unserialize(_G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].data)
-      if(unserialized == nil) then
-        -- Likely corrupted.
-        _G.IP.logger.write("Invalid deserialization on packet.")
-        _G.IP.logger.write("Data: " .. _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].data)
-        _G.IP.logger.write("Erasing SEQ queue...")
-        _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort] = nil
-        if(#_G.FRAG[addr].packetCache[packet.senderMAC] == 0) then
-          _G.FRAG[addr].packetCache[packet.senderMAC] = nil
-        end
-        return
-      end
-      local newPacket = packet
-      newPacket.data = unserialized
-      require("IP.subnet").receive(_, receiverMAC, c, targetPort, d, serialization.serialize(newPacket))
+    return
+  end
+  if(not _G.FRAG[addr].packetCache[packet.senderMAC]) then
+    _G.FRAG[addr].packetCache[packet.senderMAC] = {}
+  end
+  if(not _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort]) then
+    _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort] = {}
+  end
+  local data = _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].data or ""
+  _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].data = data .. (packet.data or "")
+  if(packet.endSeq) then
+    -- OOH RAH
+    -- Last packet in sequence.
+    local unserialized = serialization.unserialize(_G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].data)
+    if(unserialized == nil) then
+      -- Likely corrupted.
+      _G.IP.logger.write("Invalid deserialization on packet.")
+      _G.IP.logger.write("Data: " .. _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].data)
+      _G.IP.logger.write("Erasing SEQ queue...")
       _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort] = nil
       if(#_G.FRAG[addr].packetCache[packet.senderMAC] == 0) then
         _G.FRAG[addr].packetCache[packet.senderMAC] = nil
       end
-      return -- get out!
+      return
     end
-    if(_G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].lastSeq == nil) then
-      _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].lastSeq = packet.seq
-    elseif(packet.seq - 1 ~= _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].lastSeq) then
-      _G.IP.logger.write("Out of sequence packet. Expected SEQ: " .. _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].lastSeq + 1 .. ", got " .. packet.seq .. ".")
+    local newPacket = packet
+    newPacket.data = unserialized
+    require("IP.subnet").receive(_, receiverMAC, c, targetPort, d, serialization.serialize(newPacket))
+    _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort] = nil
+    if(#_G.FRAG[addr].packetCache[packet.senderMAC] == 0) then
+      _G.FRAG[addr].packetCache[packet.senderMAC] = nil
     end
-    _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].lastSeq = packet.seq
+    return -- get out!
   end
+  if(_G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].lastSeq == nil) then
+    _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].lastSeq = packet.seq
+  elseif(packet.seq - 1 ~= _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].lastSeq) then
+    _G.IP.logger.write("Out of sequence packet. Expected SEQ: " .. _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].lastSeq + 1 .. ", got " .. packet.seq .. ".")
+  end
+  _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].lastSeq = packet.seq
 end
 
 return fragmentation
