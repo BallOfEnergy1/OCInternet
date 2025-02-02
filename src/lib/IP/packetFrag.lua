@@ -64,13 +64,11 @@ end
 function fragmentation.send(MAC, port, packet)
   local modem = _G.ROUTE and _G.ROUTE.routeModem.modem or _G.IP.primaryModem.modem
   fragmentPacket(modem, port, packet, MAC)
-  event.push("modem_sent", MAC, port, serialization.serialize(packet))
 end
 
 function fragmentation.broadcast(port, packet)
   local modem = _G.ROUTE and _G.ROUTE.routeModem.modem or _G.IP.primaryModem.modem
   fragmentPacket(modem, port, packet)
-  event.push("modem_broadcast", port, serialization.serialize(packet))
 end
 
 function fragmentation.setup()

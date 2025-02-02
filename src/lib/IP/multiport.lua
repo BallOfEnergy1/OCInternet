@@ -10,6 +10,7 @@ function multiport.send(packet, skipRegister)
   if(not skipRegister) then
     require("IP.protocols.DHCP").registerIfNeeded()
   end
+  event.push("multiport_sent", packet.targetMAC, packet.senderMAC, packet.targetPort, 0, serialization.serialize(packet))
   subnet.send(packet.targetMAC, multiportPort, packet)
 end
 
@@ -19,6 +20,7 @@ function multiport.broadcast(packet, skipRegister)
   if(not skipRegister) then
     require("IP.protocols.DHCP").registerIfNeeded()
   end
+  event.push("multiport_broadcast", packet.targetMAC, packet.senderMAC, packet.targetPort, 0, serialization.serialize(packet))
   subnet.broadcast(multiportPort, packet)
 end
 
@@ -43,6 +45,8 @@ function multiport.requestMessageWithTimeout(packet, skipRegister, broadcast, ti
         return nil
       end
       goto start
+    else
+      goto wait
     end
   end
   if(a == "interrupted") then
