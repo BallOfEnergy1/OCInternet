@@ -15,7 +15,7 @@ local timeout = 300
 local function onARPMessage(receivedPacket)
   local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
   if(receivedPacket.data == _G.IP.modems[addr].clientIP) then
-    multiport.send(Packet:new(nil, arpProtocol, receivedPacket.senderIP, arpPort, _G.IP.MAC, receivedPacket.senderMAC):build())
+    multiport.send(Packet:new(nil, arpProtocol, receivedPacket.senderIP, arpPort, _G.IP.modems[addr].MAC, receivedPacket.senderMAC):build())
   end
 end
 

@@ -10,18 +10,39 @@ end
 
 local event = require("event")
 local buttonLib = require("button")
+local serialization = require("serialization")
+local ipUtil = require("IP.IPUtil")
 
 gpu.setResolution(resX, resY)
 
 local backgroundColor = 0xFFFFFF
 local accentColor = 0x66B6FF
+local redColor = gpu.maxDepth() == 8 and 0xFF0000 or 0x00
+local greenColor = gpu.maxDepth() == 8 and 0x00FF00 or 0x00
+local darkBackgroundColor = 0xDDDDDD
 local textColor = 0x000000
 
 local buffer = gpu.allocateBuffer(resX, resY)
 
 local status = 0
+local capturing = false
 local selectedInterface
 local packetsOnInterface
+local scroll = 0
+local shownPacketIndex
+
+local showExtendedInfo = resY > 25
+local showPacketInfoBar = false
+
+local function makeSize(text, size)
+  local stringifiedText = tostring(text)
+  if(#stringifiedText < size) then
+    for _ = 1, size - #stringifiedText do
+      stringifiedText = stringifiedText .. " "
+    end
+  end
+  return stringifiedText
+end
 
 local function writeTopBar()
   gpu.setBackground(accentColor)
@@ -33,13 +54,30 @@ local function writeTopBar()
   gpu.setBackground(backgroundColor)
 end
 
+local function writeBottomBar()
+  gpu.setBackground(accentColor)
+  gpu.fill(1, resY, resX, 1, " ")
+  if(capturing) then
+    gpu.setForeground(greenColor)
+    gpu.set(2, resY, "Capturing")
+  else
+    gpu.setForeground(redColor)
+    gpu.set(2, resY, "Stopped")
+  end
+  gpu.setForeground(textColor)
+  gpu.setBackground(backgroundColor)
+end
+
 local registeredButtons = {}
+
+local interfaceStartTime
 
 do
   table.insert(registeredButtons, buttonLib.makeButton(1, 6, resX, 1, function()
     selectedInterface = 0
     status = 1
     packetsOnInterface = {}
+    interfaceStartTime = require("computer").uptime()
   end, function()
     return status == 0
   end))
@@ -50,6 +88,7 @@ do
       selectedInterface = i
       status = 1
       packetsOnInterface = {}
+      interfaceStartTime = require("computer").uptime()
     end, function()
       return status == 0
     end))
@@ -59,16 +98,36 @@ do
     selectedInterface = nil
     status = 0
     packetsOnInterface = nil
+    interfaceStartTime = nil
+    capturing = false
   end, function()
     return status == 1
+  end))
+  table.insert(registeredButtons, buttonLib.makeButton(1, 2, 15, 1, function()
+    if(capturing == false) then -- Will be true.
+      packetsOnInterface = {} -- Clear capture.
+    end
+    capturing = not capturing
+  end, function()
+    return status == 1
+  end))
+  table.insert(registeredButtons, buttonLib.makeButton(2, 4, resX - 1, resY - 4, function(x, y)
+    showPacketInfoBar = true
+    if(packetsOnInterface[y + scroll]) then
+      shownPacketIndex = y + scroll
+    end
+  end, function()
+    return status == 1 and not showPacketInfoBar
+  end))
+  table.insert(registeredButtons, buttonLib.makeButton(2, 4, resX - 1, resY - 4, function()
+    showPacketInfoBar = false
+    shownPacketIndex = nil
+  end, function()
+    return status == 1 and showPacketInfoBar
   end))
 end
 
 local function drawEntryScreen()
-  gpu.setForeground(textColor)
-  gpu.setBackground(backgroundColor)
-  gpu.fill(1, 1, resX, resY, " ")
-  writeTopBar()
   gpu.set(3, 5, "Capture")
   gpu.set(4, 6, "- Loopback traffic")
   gpu.setBackground(0x0)
@@ -88,8 +147,77 @@ local function drawEntryScreen()
   end
 end
 
-local function drawInterfaceScreen()
+local function inferProtocolFromPacket(packet)
+  if(packet.protocol == 1) then
+    return "ICMP"
+  elseif(packet.protocol == 2) then
+    return "ARP"
+  elseif(packet.protocol == 3) then
+    --unassigned somehow
+    return "Unk."
+  elseif(packet.protocol == 4) then
+    if(packet.udpProto == 1) then
+      return "DHCP"
+    end
+    return "UDP"
+  elseif(packet.protocol == 5) then
+    return "TCP"
+  end
+  return "Unk."
+end
 
+local function inferInfoFromPacket(packet)
+  local protocol = inferProtocolFromPacket(packet)
+  if(protocol == "ICMP") then
+    if(packet.data.type == 0x1A) then
+      return "Echo (ping) request"
+    elseif(packet.data.type == 0x00) then
+      return "Echo (ping) reply"
+    end
+  elseif(protocol == "ARP") then
+    if(packet.targetIP == ipUtil.fromUserFormat("FFFF:FFFF:FFFF:FFFF")) then
+      return "Who has " .. ipUtil.toUserFormat(packet.data) .. "? Tell " .. ipUtil.toUserFormat(packet.senderIP)
+    else
+      return ipUtil.toUserFormat(packet.senderIP) .. " is at " .. packet.data
+    end
+  elseif(protocol == "UDP") then
+    return packet.senderPort .. " → " .. packet.targetPort .. " " .. "Len=" .. (packet.udpLength or "Unk.")
+  end
+end
+
+local function drawInterfaceScreen()
+  gpu.setBackground(darkBackgroundColor)
+  gpu.set(2, 2, (capturing and "Stop Capturing" or "Start Capturing"))
+  gpu.setBackground(backgroundColor)
+  gpu.set(2, 3, "No.    Time      Source               Destination          Protocol  Length   Info")
+  scroll = math.max(0, #packetsOnInterface - (showPacketInfoBar and resY/2 or resY - 4))
+  for i, v in pairs(packetsOnInterface) do
+    if(i > scroll) then
+      if(showExtendedInfo) then
+        gpu.set(2, 4 + i - scroll - 1,
+          makeSize(i, 6) .. " " ..
+            makeSize(math.floor(v.time*100)/100, 9) .. " " ..
+            makeSize(ipUtil.toUserFormat(v.packet.senderIP) or "nil", 19) .. "  " ..
+            makeSize(ipUtil.toUserFormat(v.packet.targetIP) or "nil", 19) .. "  " ..
+            makeSize(inferProtocolFromPacket(v.packet), 8) .. "  " ..
+            makeSize(#serialization.serialize(v.packet), 6) .. "   " ..
+            inferInfoFromPacket(v.packet)
+        )
+      else
+        gpu.set(2, 4 + i - scroll - 1,
+          makeSize(i, 6) .. " " ..
+            makeSize(math.floor(v.time*100)/100, 9) .. " " ..
+            makeSize(ipUtil.toUserFormat(v.packet.senderIP) or "nil", 19) .. "  " ..
+            makeSize(ipUtil.toUserFormat(v.packet.targetIP) or "nil", 19) .. "  " ..
+            makeSize(inferProtocolFromPacket(v.packet), 8) .. "  " ..
+            makeSize(#serialization.serialize(v.packet), 6)
+        )
+      end
+    end
+  end
+  if(shownPacketIndex) then
+  
+  end
 end
 
 local function writeToScreen()
@@ -102,7 +230,7 @@ local function updateNetworkIndicator(receiverMAC, senderMAC)
     local index = 1
     if(receiverMAC ~= senderMAC) then
       for i in pairs(_G.IP.modems) do
-        if(i == receiverMAC) then
+        if(i == receiverMAC or i == senderMAC) then
           break
         end
         index = index + 1
@@ -121,39 +249,57 @@ end
 
 local function onNetworkEvent(_, receiverMAC, senderMAC, _, dist, message)
   updateNetworkIndicator(receiverMAC, senderMAC)
-  if(status == 1 and selectedInterface == receiverMAC) then
-    packetsOnInterface[#packetsOnInterface] = {dist = dist, packet = message}
+  if(status == 1 and selectedInterface == receiverMAC and capturing) then
+    message = serialization.unserialize(message)
+    packetsOnInterface[#packetsOnInterface + 1] = {dist = dist, packet = message, time = require("computer").uptime() - interfaceStartTime}
   end
 end
 
-local function onNetworkSend(_, receiverMAC, senderMAC, _, dist, message)
+local function onNetworkSent(_, receiverMAC, senderMAC, _, dist, message)
   updateNetworkIndicator(receiverMAC, senderMAC)
-  if(status == 1 and selectedInterface == senderMAC) then
-    packetsOnInterface[#packetsOnInterface] = {dist = dist, packet = message}
+  if(status == 1 and selectedInterface == senderMAC and capturing) then
+    message = serialization.unserialize(message)
+    packetsOnInterface[#packetsOnInterface + 1] = {dist = dist, packet = message, time = require("computer").uptime() - interfaceStartTime}
   end
 end
 
 local function onNetworkBroadcast(_, receiverMAC, senderMAC, _, dist, message)
   updateNetworkIndicator(receiverMAC, senderMAC)
-  if(status == 1 and selectedInterface == senderMAC) then
-    packetsOnInterface[#packetsOnInterface] = {dist = dist, packet = message}
+  if(status == 1 and selectedInterface == senderMAC and capturing) then
+    message = serialization.unserialize(message)
+    packetsOnInterface[#packetsOnInterface + 1] = {dist = dist, packet = message, time = require("computer").uptime() - interfaceStartTime}
   end
 end
 
 gpu.setActiveBuffer(buffer)
+gpu.setForeground(textColor)
+gpu.setBackground(backgroundColor)
+gpu.fill(1, 1, resX, resY, " ")
+writeTopBar()
 drawEntryScreen()
 writeToScreen()
 
 local networkEvent = event.listen("multiport_message", onNetworkEvent)
-local networkSend = event.listen("multiport_send", onNetworkSend)
+local networkSent = event.listen("multiport_sent", onNetworkSent)
 local networkBroadcast = event.listen("multiport_broadcast", onNetworkBroadcast)
 
 local running = true
 
 local interruptedListener = event.listen("interrupted", function() running = false end)
 
+buttonLib.start()
+
 while running do
+  gpu.setForeground(textColor)
+  gpu.setBackground(backgroundColor)
+  gpu.fill(1, 1, resX, resY, " ")
   writeTopBar()
+  writeBottomBar()
+  if(status == 1) then
+    drawInterfaceScreen()
+  else
+    drawEntryScreen()
+  end
   writeToScreen()
   os.sleep(0.05)
 end
@@ -162,11 +308,15 @@ for _, v in pairs(registeredButtons) do
   buttonLib.removeButton(v)
 end
 
+buttonLib.stop()
+
 gpu.setActiveBuffer(0)
 
 event.cancel(networkEvent)
-event.cancel(networkSend)
+event.cancel(networkSent)
 event.cancel(networkBroadcast)
 event.cancel(interruptedListener)
 
 gpu.freeBuffer(buffer)
+
+require("term").clear()

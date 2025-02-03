@@ -18,7 +18,7 @@ function Packet:new(_, protocol, targetIP, targetPort, data, MAC, noReg)
   setmetatable(o, self)
   self.__index = self
   o.protocol = protocol
-  local dynPort = math.random(49152, 65535) -- Random dynamic port.
+  local dynPort = math.floor(math.random(49152, 65535)) -- Random dynamic port.
   o.senderPort = dynPort
   o.targetPort = targetPort
   local broadcast = require("IP.IPUtil").fromUserFormat("FFFF:FFFF:FFFF:FFFF")

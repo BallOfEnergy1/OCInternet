@@ -54,7 +54,9 @@ local function onDHCPMessage(receivedPacket)
   end
   _G.IP.logger.write("#[DHCPServer] Sending IP '" .. IP .. "' to client.")
   local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
-  multiport.send(Packet:new(nil, 4 --[[ UDP ]], 0, dhcpClientPort, {registeredIP = IP, subnetMask = _G.DHCP.providedSubnetMask, defaultGateway = _G.IP.modems[addr].defaultGateway}, receivedPacket.senderMAC):build())
+  local packet = Packet:new(nil, 4 --[[ UDP ]], 0, dhcpClientPort, {registeredIP = IP, subnetMask = _G.DHCP.providedSubnetMask, defaultGateway = _G.IP.modems[addr].defaultGateway}, receivedPacket.senderMAC):build()
+  packet.udpProto = 1
+  multiport.send(packet)
   _G.DHCP.allRegisteredMACs[receivedPacket.senderMAC] = {ip = IP, index = _G.DHCP.IPIndex}
 end
 

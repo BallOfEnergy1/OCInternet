@@ -51,12 +51,14 @@ end
 function udp.send(IP, port, payload, protocol, skipRegistration)
   local packet = Packet:new(nil, udpProtocol, IP, port, payload, nil, skipRegistration):build()
   packet.udpProto = protocol
+  packet.udpLength = #serialization.serialize(payload)
   multiport.send(packet, skipRegistration)
 end
 
 function udp.broadcast(port, payload, protocol, skipRegistration)
   local packet = Packet:new(nil, udpProtocol, util.fromUserFormat("FFFF:FFFF:FFFF:FFFF"), port, payload, nil, skipRegistration):build()
   packet.udpProto = protocol
+  packet.udpLength = #serialization.serialize(payload)
   multiport.broadcast(packet, skipRegistration)
 end
 

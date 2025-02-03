@@ -13,7 +13,7 @@ print(" Proto\tLocal Address\t\t\tForeign Address\t\t\tState")
 local function makeSize(text, size)
   local stringifiedText = tostring(text)
   if(#stringifiedText < size) then
-    for _ = 1, size do
+    for _ = 1, size - #stringifiedText do
       stringifiedText = stringifiedText .. " "
     end
   end

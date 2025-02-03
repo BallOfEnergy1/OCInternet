@@ -38,6 +38,7 @@ function dhcp.registerIfNeeded()
   end
   local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
   if(not _G.DHCP.DHCPRegisteredModems[addr]) then
+    _G.IP.modems[addr].clientIP = 0
     local attempts = 2
     local message, code
     for _ = 1, attempts do
