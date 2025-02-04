@@ -13,7 +13,7 @@ local dhcpServer = {}
 
 function dhcpServer.flushAllAndNotify() -- This is to prevent the IP space from getting very full. Run this occasionally and clients will not be affected (too much).
   for _, v in pairs(_G.DHCP.allRegisteredMACs) do
-    udp.send(v, dhcpClientPort, 0x11, dhcpUDPProtocol)
+    udp.send(v.ip, dhcpClientPort, 0x11, dhcpUDPProtocol)
   end
   _G.DHCP.allRegisteredMACs = {}
   _G.DHCP.IPIndex = 0

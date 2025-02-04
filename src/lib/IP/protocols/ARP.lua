@@ -52,6 +52,11 @@ function arp.trimCache()
 end
 
 function arp.updateCache(packet)
+  if(packet.senderIP == util.fromUserFormat("FFFF:FFFF:FFFF:FFFF") or packet.targetIP == util.fromUserFormat("FFFF:FFFF:FFFF:FFFF")) then
+    return
+  end
+  if(packet.senderIP == util.fromUserFormat("0000:0000:0000:0000") or packet.targetIP == util.fromUserFormat("0000:0000:0000:0000")) then    return
+  end
   for MAC, IPtable in pairs(_G.ARP.cachedMappings) do
     if(IPtable.IP == packet.senderIP and MAC == packet.senderMAC) then
       IPtable.timeout = getTimeout(timeout)

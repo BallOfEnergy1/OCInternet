@@ -29,10 +29,8 @@ local capturing = false
 local selectedInterface
 local packetsOnInterface
 local scroll = 0
-local shownPacketIndex
 
 local showExtendedInfo = resY > 25
-local showPacketInfoBar = false
 
 local function makeSize(text, size)
   local stringifiedText = tostring(text)
@@ -111,20 +109,6 @@ do
   end, function()
     return status == 1
   end))
-  table.insert(registeredButtons, buttonLib.makeButton(2, 4, resX - 1, resY - 4, function(x, y)
-    showPacketInfoBar = true
-    if(packetsOnInterface[y + scroll]) then
-      shownPacketIndex = y + scroll
-    end
-  end, function()
-    return status == 1 and not showPacketInfoBar
-  end))
-  table.insert(registeredButtons, buttonLib.makeButton(2, 4, resX - 1, resY - 4, function()
-    showPacketInfoBar = false
-    shownPacketIndex = nil
-  end, function()
-    return status == 1 and showPacketInfoBar
-  end))
 end
 
 local function drawEntryScreen()
@@ -170,18 +154,29 @@ local function inferInfoFromPacket(packet)
   local protocol = inferProtocolFromPacket(packet)
   if(protocol == "ICMP") then
     if(packet.data.type == 0x1A) then
-      return "Echo (ping) request"
+      return "Echo (ping) request", 0xCCB6FF
     elseif(packet.data.type == 0x00) then
-      return "Echo (ping) reply"
+      return "Echo (ping) reply", 0xCCB6FF
     end
   elseif(protocol == "ARP") then
     if(packet.targetIP == ipUtil.fromUserFormat("FFFF:FFFF:FFFF:FFFF")) then
-      return "Who has " .. ipUtil.toUserFormat(packet.data) .. "? Tell " .. ipUtil.toUserFormat(packet.senderIP)
+      return "Who has " .. ipUtil.toUserFormat(packet.data) .. "? Tell " .. ipUtil.toUserFormat(packet.senderIP), 0xFFFFC0
     else
-      return ipUtil.toUserFormat(packet.senderIP) .. " is at " .. packet.data
+      return ipUtil.toUserFormat(packet.senderIP) .. " is at " .. packet.data, 0xFFFFC0
     end
   elseif(protocol == "UDP") then
-    return packet.senderPort .. " → " .. packet.targetPort .. " " .. "Len=" .. (packet.udpLength or "Unk.")
+    return packet.senderPort .. " → " .. packet.targetPort .. " " .. "Len=" .. (packet.udpLength or "Unk."), 0xCCFFFF
+  elseif(protocol == "DHCP") then
+    if(packet.data == 0x10) then
+      return "DHCP Release", 0xCCFFFF
+    elseif(packet.data == 0x11) then
+      return "DHCP Flush", 0xCCFFFF
+    elseif(packet.targetPort == 67) then
+      return "DHCP Request", 0xCCFFFF
+    elseif(packet.targetPort == 68) then
+      return "DHCP Response", 0xCCFFFF
+    end
+  elseif(protocol == "TCP") then
   end
 end
 
@@ -190,10 +185,13 @@ local function drawInterfaceScreen()
   gpu.set(2, 2, (capturing and "Stop Capturing" or "Start Capturing"))
   gpu.setBackground(backgroundColor)
   gpu.set(2, 3, "No.    Time      Source               Destination          Protocol  Length   Info")
-  scroll = math.max(0, #packetsOnInterface - (showPacketInfoBar and resY/2 or resY - 4))
+  scroll = math.max(0, #packetsOnInterface - resY - 4)
   for i, v in pairs(packetsOnInterface) do
     if(i > scroll) then
       if(showExtendedInfo) then
+        local text, color = inferInfoFromPacket(v.packet)
+        gpu.setBackground(color)
+        gpu.fill(1, 4 + i - scroll - 1, resX, 1, " ")
         gpu.set(2, 4 + i - scroll - 1,
           makeSize(i, 6) .. " " ..
             makeSize(math.floor(v.time*100)/100, 9) .. " " ..
@@ -201,7 +199,7 @@ local function drawInterfaceScreen()
             makeSize(ipUtil.toUserFormat(v.packet.targetIP) or "nil", 19) .. "  " ..
             makeSize(inferProtocolFromPacket(v.packet), 8) .. "  " ..
             makeSize(#serialization.serialize(v.packet), 6) .. "   " ..
-            inferInfoFromPacket(v.packet)
+            text
         )
       else
         gpu.set(2, 4 + i - scroll - 1,
@@ -215,9 +213,7 @@ local function drawInterfaceScreen()
       end
     end
   end
-  if(shownPacketIndex) then
-  
-  end
+  gpu.setBackground(backgroundColor)
 end
 
 local function writeToScreen()

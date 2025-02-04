@@ -14,6 +14,9 @@ function util.toHex(dec)
 end
 
 function util.toUserFormat(dec)
+  if(dec == nil or type(dec) ~= "number") then
+    return "nil"
+  end
   local mask = 65535
   local endingString = ""
   for quartet = 0, 2 do
