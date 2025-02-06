@@ -15,7 +15,7 @@ local timeout = 300
 local function onARPMessage(receivedPacket)
   local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
   if(receivedPacket.data == _G.IP.modems[addr].clientIP) then
-    multiport.send(Packet:new(nil, arpProtocol, receivedPacket.senderIP, arpPort, _G.IP.modems[addr].MAC, receivedPacket.senderMAC):build())
+    multiport.send(Packet:new(nil, arpProtocol, receivedPacket.senderIP, arpPort, _G.IP.modems[addr].MAC, receivedPacket.senderMAC))
   end
 end
 
@@ -31,7 +31,7 @@ function arp.resolve(IP, skipRegistration)
       arp.trimCache()
     end
   end
-  local packet = Packet:new(nil, arpProtocol, util.fromUserFormat("FFFF:FFFF:FFFF:FFFF"), arpPort, IP, nil, skipRegistration):build()
+  local packet = Packet:new(nil, arpProtocol, util.fromUserFormat("FFFF:FFFF:FFFF:FFFF"), arpPort, IP, nil, skipRegistration)
   local raw, code = multiport.requestMessageWithTimeout(packet, true, true, 3, 1,
     function(_, _, _, targetPort, _, message) return targetPort == arpPort and serialization.unserialize(message).protocol == arpProtocol end)
   if(raw == nil) then

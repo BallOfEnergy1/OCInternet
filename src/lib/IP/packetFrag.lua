@@ -3,6 +3,9 @@ local component = require("component")
 local serialization = require("serialization")
 local event = require("event")
 
+local hyperPack = require("hyperpack")
+local Packet = require("IP.classes.PacketClass")
+
 local fragmentation = {}
 
 local MTU = 8192
@@ -18,46 +21,15 @@ if(MTU > maxMTU) then
   MTU = maxMTU
 end
 
+MTU = MTU - 2 -- Packet overhead
+
 local function fragmentPacket(modem, port, packet, MAC)
-  packet.seq = math.random(0xFFFFFFFF)
-  packet.endSeq = false
-  local serialized = serialization.serialize(packet)
-  if(#serialized > MTU) then
-    local packetSize = #serialized
-    local dataToSend = serialization.serialize(packet.data)
-    local headerSize = packetSize - #dataToSend + 2 -- Packet overhead.
-    local adjustedMTU = MTU
-    if(MTU < headerSize) then
-      adjustedMTU = MTU + (headerSize - MTU) + 100 -- Plus 100 bytes for extra data.
-      if(adjustedMTU > maxMTU) then -- tf
-        _G.IP.logger.write("Invalid MTU: " .. adjustedMTU)
-        return
-      end
+  for _, v in pairs(packet:serializeAndFragment(MTU)) do
+    if(MAC) then
+      modem.send(MAC, port, v)
+    else
+      modem.broadcast(port, v)
     end
-    local seq = 0
-    local packetCopy = packet
-    while #dataToSend >= 1 do
-      packetCopy.data = dataToSend:sub(0, adjustedMTU - headerSize)
-      packetCopy.seq = seq -- Since no matter what number is put in, the data size shouldn't change, we can do this without worry.
-      if(MAC) then
-        modem.send(MAC, port, serialization.serialize(packetCopy))
-      else
-        modem.broadcast(port, serialization.serialize(packetCopy))
-      end
-      dataToSend = dataToSend:sub(adjustedMTU - headerSize)
-      if(#dataToSend < adjustedMTU) then
-        packetCopy.endSeq = true -- loop over to last packet.
-      end
-      seq = seq + 1
-    end
-    return
-  end
-  packet.seq = nil
-  packet.endSeq = nil
-  if(MAC) then
-    modem.send(MAC, port, serialization.serialize(packet))
-  else
-    modem.broadcast(port, serialization.serialize(packet))
   end
 end
 
@@ -87,27 +59,42 @@ end
 
 function fragmentation.receive(_, receiverMAC, c, targetPort, d, message)
   local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
-  local packet = serialization.unserialize(message)
-  if(packet == nil) then
+  
+  local packedString = hyperPack:new()
+  local code, result = pcall(packedString:deserializeIntoClass(message))
+  if(code == false) then
     return -- Drop.
   end
-  if(receiverMAC ~= addr or (receiverMAC ~= packet.targetMAC and packet.targetMAC ~= "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF")) then
-    _G.FRAG[addr].packetCache[packet.senderMAC] = nil
+  local packetCopy = hyperPack:new():copyFrom(packedString)
+  
+  local protocol = result:popValue()
+  local senderPortPacket = packedString:popValue()
+  local targetPortPacket = packedString:popValue()
+  local targetMAC = packedString:popValue()
+  local senderMAC = packedString:popValue()
+  local senderIP = packedString:popValue()
+  local targetIP = packedString:popValue()
+  local seq = packedString:popValue()
+  local endSeq = packedString:popValue()
+  local packetData = packedString:popValue()
+  
+  if(receiverMAC ~= addr or (receiverMAC ~= targetMAC and targetMAC ~= "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF")) then
+    _G.FRAG[addr].packetCache[senderMAC] = nil
     return
   end
   
-  if(not packet.seq) then
-    require("IP.subnet").receive(_, receiverMAC, c, targetPort, d, message)
+  if(seq == 0xFFFFFFFF) then
+    require("IP.subnet").receive(_, receiverMAC, c, targetPort, d, packetCopy)
     return
   end
-  if(not _G.FRAG[addr].packetCache[packet.senderMAC]) then
-    _G.FRAG[addr].packetCache[packet.senderMAC] = {}
+  if(not _G.FRAG[addr].packetCache[senderMAC]) then
+    _G.FRAG[addr].packetCache[senderMAC] = {}
   end
-  if(not _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort]) then
-    _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort] = {}
+  if(not _G.FRAG[addr].packetCache[senderMAC][targetPortPacket]) then
+    _G.FRAG[addr].packetCache[senderMAC][targetPortPacket] = {}
   end
-  local data = _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].data or ""
-  _G.FRAG[addr].packetCache[packet.senderMAC][packet.targetPort].data = data .. (packet.data or "")
+  local data = _G.FRAG[addr].packetCache[senderMAC][targetPortPacket].data or ""
+  _G.FRAG[addr].packetCache[senderMAC][targetPortPacket].data = data .. (packetData or "")
   if(packet.endSeq) then
     -- OOH RAH
     -- Last packet in sequence.

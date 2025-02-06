@@ -177,6 +177,9 @@ local function inferInfoFromPacket(packet)
       return "DHCP Response", 0xCCFFFF
     end
   elseif(protocol == "TCP") then
+    return "", 0xCCFFC0
+  elseif(protocol == "Unk.") then
+    return "", 0x992400
   end
 end
 

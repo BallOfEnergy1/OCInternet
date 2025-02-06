@@ -17,7 +17,7 @@ local function onICMPMessage(receivedPacket)
 end
 
 function icmp.send(IP, type, payload, expectResponse)
-  local packet = Packet:new(nil, icmpProtocol, IP, icmpPort, {type = type, payload = payload}):build()
+  local packet = Packet:new(nil, icmpProtocol, IP, icmpPort, {type = type, payload = payload})
   if(expectResponse) then
     local raw, code = multiport.requestMessageWithTimeout(packet
     , false, false, 5, 1, function(_, _, _, targetPort, _, message) return targetPort == icmpPort and serialization.unserialize(message).protocol == icmpProtocol end)

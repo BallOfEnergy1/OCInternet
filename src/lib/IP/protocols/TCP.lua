@@ -43,7 +43,7 @@ local Session = {
 }
 
 local function send(IP, port, payload, skipRegistration)
-  local packet = Packet:new(nil, tcpProtocol, IP, port, payload, nil, nil):build()
+  local packet = Packet:new(nil, tcpProtocol, IP, port, payload, nil, nil)
   multiport.send(packet, skipRegistration)
 end
 
@@ -120,7 +120,7 @@ function Session:acceptConnection(SYNPacket)
     self.targetIP,
     self.targetPort,
     {tcp = TCPHeader:new(0x05, self.ackNum, self.seqNum):build(), data = nil} -- SYN-ACK
-  ):build(), false, false, 5, 5, function(_, _, _, targetPort, _, message) return targetPort == self.targetPort and serialization.unserialize(message).protocol == tcpProtocol end)
+  ), false, false, 5, 5, function(_, _, _, targetPort, _, message) return targetPort == self.targetPort and serialization.unserialize(message).protocol == tcpProtocol end)
   
   if(message == nil and code == -1) then
     self.status = "CLOSE"
@@ -213,7 +213,7 @@ function Session:start()
     self.targetIP,
     self.targetPort,
     {tcp = TCPHeader:new(0x04, 0, self.seqNum):build(), data = nil} -- SYN
-  ):build(), false, false, 5, 5, function(_, _, _, targetPort, _, message) return targetPort == self.targetPort and serialization.unserialize(message).protocol == tcpProtocol end)
+  ), false, false, 5, 5, function(_, _, _, targetPort, _, message) return targetPort == self.targetPort and serialization.unserialize(message).protocol == tcpProtocol end)
   if(message == nil and code == -1) then
     self:reset()
     self.status = "CLOSE"
@@ -261,7 +261,7 @@ function Session:stop()
     self.targetIP,
     self.targetPort,
     {tcp = TCPHeader:new(0x08, self.ackNum, self.seqNum):build(), data = nil} -- FIN
-  ):build(), false, false, 5, 5, function(_, _, _, targetPort, _, receivedMessage) return targetPort == self.targetPort and serialization.unserialize(receivedMessage).protocol == tcpProtocol end)
+  ), false, false, 5, 5, function(_, _, _, targetPort, _, receivedMessage) return targetPort == self.targetPort and serialization.unserialize(receivedMessage).protocol == tcpProtocol end)
   if(message == nil and code == -1) then
     self:reset()
     self.status = "CLOSE"
@@ -319,7 +319,7 @@ function Session:send(payload)
     self.targetIP,
     self.targetPort,
     {tcp = TCPHeader:new(0x00, self.ackNum, self.seqNum):build(), data = payload} -- DATA
-  ):build(), false, false, 5, 5, function(_, _, _, targetPort, _, message) return targetPort == self.targetPort and serialization.unserialize(message).protocol == tcpProtocol end)
+  ), false, false, 5, 5, function(_, _, _, targetPort, _, message) return targetPort == self.targetPort and serialization.unserialize(message).protocol == tcpProtocol end)
   if(message == nil and code == -1) then
     self:reset()
     self.status = "CLOSE"

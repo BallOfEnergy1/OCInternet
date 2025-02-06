@@ -1,6 +1,6 @@
 local event = require("event")
 local serialization = require("serialization")
-
+local hyperPack = require("hyperpack")
 local subnet = require("IP.subnet")
 
 local multiport  = {}
@@ -10,7 +10,14 @@ function multiport.send(packet, skipRegister)
   if(not skipRegister) then
     require("IP.protocols.DHCP").registerIfNeeded()
   end
-  event.push("multiport_sent", packet.targetMAC, packet.senderMAC, packet.targetPort, 0, serialization.serialize(packet))
+  if(not _G.IP.disableSendEvents) then
+    local packedString = hyperPack:new()
+    for _, v in pairs(packet.header) do
+      packedString:pushValue(v)
+    end
+    packedString:pushValue(packet.data)
+    event.push("multiport_sent", packet.targetMAC, packet.senderMAC, packet.targetPort, 0, packedString:serialize())
+  end
   subnet.send(packet.targetMAC, multiportPort, packet)
 end
 
@@ -20,7 +27,14 @@ function multiport.broadcast(packet, skipRegister)
   if(not skipRegister) then
     require("IP.protocols.DHCP").registerIfNeeded()
   end
-  event.push("multiport_broadcast", packet.targetMAC, packet.senderMAC, packet.targetPort, 0, serialization.serialize(packet))
+  if(not _G.IP.disableSendEvents) then
+    local packedString = hyperPack:new()
+    for _, v in pairs(packet.header) do
+      packedString:pushValue(v)
+    end
+    packedString:pushValue(packet.data)
+    event.push("multiport_broadcast", packet.targetMAC, packet.senderMAC, packet.targetPort, 0, packedString:serialize())
+  end
   subnet.broadcast(multiportPort, packet)
 end
 

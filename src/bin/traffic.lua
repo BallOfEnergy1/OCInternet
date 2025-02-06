@@ -4,6 +4,7 @@ local shell = require("shell")
 local util = require("IP.IPUtil")
 local ARP = require("IP.protocols.ARP")
 local event = require("event")
+local term = require("term")
 
 local args, ops = shell.parse(...)
 
@@ -20,8 +21,9 @@ local function makePayload(size)
   return payload
 end
 
+local payloadSize
+
 local function printInfo(IP, pings)
-  print("Ping statistics for " .. IP .. ":")
   local received = 0
   local min, max, avg
   local totalTime = 0
@@ -34,15 +36,21 @@ local function printInfo(IP, pings)
     end
   end
   avg = totalTime / #pings
-  print("\tPackets: Sent = " .. #pings .. ", Received = " .. received .. ", Lost = " .. #pings - received .. ",")
-  print("Approximate round trip times in ticks:")
-  print("\tMinimum = " .. math.floor((min or 0)*20*10000)/10000 .. " ticks, Maximum = " .. math.floor((max or 0)*20*10000)/10000 .. " ticks, Average = " .. math.floor((avg or 0)*20*10000)/10000 .. " ticks")
+  local userFriendly = util.toUserFormat(IP)
+  if(userFriendly ~= args[1]) then
+    print("Sending traffic to " .. args[1] .. " [" .. userFriendly .. "] with " .. payloadSize .. " bytes of data (each).")
+  else
+    print("Sending traffic to " .. args[1] .. " with " .. payloadSize .. " bytes of data (each).")
+  end
+  print("Traffic statistics for " .. userFriendly .. ":\n" ..
+  "\tPackets: Sent = " .. #pings .. ", Received = " .. received .. ", Lost = " .. #pings - received .. ",\n" ..
+  "Approximate round trip times in ticks:\n" ..
+  "\tMinimum = " .. math.floor((min or 0)*20*10000)/10000 .. " ticks, Maximum = " .. math.floor((max or 0)*20*10000)/10000 .. " ticks, Average = " .. math.floor((avg or 0)*20*10000)/10000 .. " ticks\n")
 end
 
 if(args[1] ~= nil and type(args[1]) == "string") then -- Take as IP.
   local IP = util.fromUserFormat(args[1])
   if(IP) then
-    local payloadSize
     if(ops.l and type(ops.l) == "string") then
       payloadSize = tonumber(ops.l)
     else
@@ -52,15 +60,9 @@ if(args[1] ~= nil and type(args[1]) == "string") then -- Take as IP.
       print("Could not resolve hostname " .. args[1] .. ".")
       return
     end
-    if(util.toUserFormat(IP) ~= args[1]) then
-      print("Pinging " .. args[1] .. " [" .. util.toUserFormat(IP) .. "] with " .. payloadSize .. " bytes of data.")
-    else
-      print("Pinging " .. args[1] .. " with " .. payloadSize .. " bytes of data.")
-    end
     local pings = {}
-    local count = math.huge
     local payload = makePayload(payloadSize)
-    for i = 1, count do
+    while true do
       local pcTime = require("computer").uptime()
       local uptime;
       local response, code;
@@ -74,20 +76,16 @@ if(args[1] ~= nil and type(args[1]) == "string") then -- Take as IP.
           printInfo(util.toUserFormat(IP), pings)
           return
         end
-        print("Ping timed out.")
         table.insert(pings, {received=false})
       else
         uptime = require("computer").uptime()
-        print("Reply from " .. util.toUserFormat(IP) .. ": bytes=" .. payloadSize .. " time=" .. math.floor((uptime - pcTime) * 10000)/10000)
         table.insert(pings, {time=uptime - pcTime, received=true})
       end
-      if(i ~= count) then
-        if(event.pull(0.05, "interrupted")) then
-          printInfo(util.toUserFormat(IP), pings)
-          return
-        end
+      if(event.pull(0.05, "interrupted")) then
+        return
       end
+      term.clear()
+      printInfo(IP, pings)
     end
-    printInfo(util.toUserFormat(IP), pings)
   end
 end
