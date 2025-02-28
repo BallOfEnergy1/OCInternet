@@ -1,9 +1,9 @@
 
 local multiport = require("IP.multiport")
-local serialization = require("serialization")
-local event  = require("event")
+local serialization = require("IP.serializationUnsafe")
+local api    = require("IP.netAPI")
 local Packet = require("IP.classes.PacketClass")
-local util   = require("IP.IPUtil")
+local hyperPack = require("hyperpack")
 
 local udpProtocol = 4
 
@@ -19,13 +19,18 @@ end
 
 function udp.UDPListen(port, callback)
   udp.setup()
-  local func = function(_, _, _, targetPort, _, message)
-    if(targetPort == port and serialization.unserialize(message).protocol == udpProtocol) then
-      callback(serialization.unserialize(message))
+  local func = function(message)
+    if(message.header.targetPort == port and message.header.protocol == udpProtocol) then
+      local packer = hyperPack:new():deserializeIntoClass(message.data)
+      local tempPacket = Packet:new():copyFrom(message)
+      tempPacket.udpProto = packer:popValue()
+      tempPacket.udpLength = packer:popValue()
+      tempPacket.data = packer:popValue()
+      callback(tempPacket)
     end
   end
-  _G.UDP.listeners[port] = func
-  event.listen("multiport_message", func)
+  local callbackObject = api.registerReceivingCallback(func)
+  _G.UDP.listeners[port] = callbackObject
 end
 
 function udp.UDPIgnore(port)
@@ -33,32 +38,45 @@ function udp.UDPIgnore(port)
   if(not _G.UDP.listeners[port]) then
     return false
   end
-  local success = event.ignore("multiport_message", _G.UDP.listeners[port])
+  local success = api.unregisterCallback(_G.UDP.listeners[port])
   _G.UDP.listeners[port] = nil
   return success
 end
 
 function udp.pullUDP(port, timeout, callback)
-  local _, _, _, targetPort, _, message = event.pull(timeout or math.huge, "multiport_message")
-  if(targetPort == port and serialization.unserialize(message).protocol == udpProtocol) then
+  local packet = multiport.pullMessageWithTimeout(timeout or math.huge, function(message)
+    return message.header.targetPort == port and message.header.protocol == udpProtocol
+  end)
+  if(packet) then
+    local packer = hyperPack:new():deserializeIntoClass(packet.data)
+    local tempPacket = Packet:new():copyFrom(packet)
+    tempPacket.udpProto = packer:popValue()
+    tempPacket.udpLength = packer:popValue()
+    tempPacket.data = packer:popValue()
     if(not callback) then
-      return serialization.unserialize(message)
+      return tempPacket
     end
-    return callback(serialization.unserialize(message))
+    return callback(tempPacket)
   end
 end
 
 function udp.send(IP, port, payload, protocol, skipRegistration)
-  local packet = Packet:new(nil, udpProtocol, IP, port, payload, nil, skipRegistration)
-  packet.udpProto = protocol
-  packet.udpLength = #serialization.serialize(payload)
+  local packer = hyperPack:new()
+  packer:pushValue(protocol)
+  packer:pushValue(#serialization.serialize(payload))
+  packer:pushValue(payload)
+  local data = packer:serialize()
+  local packet = Packet:new(udpProtocol, IP, port, data, nil, skipRegistration)
   multiport.send(packet, skipRegistration)
 end
 
 function udp.broadcast(port, payload, protocol, skipRegistration)
-  local packet = Packet:new(nil, udpProtocol, util.fromUserFormat("FFFF:FFFF:FFFF:FFFF"), port, payload, nil, skipRegistration)
-  packet.udpProto = protocol
-  packet.udpLength = #serialization.serialize(payload)
+  local packer = hyperPack:new()
+  packer:pushValue(protocol)
+  packer:pushValue(#serialization.serialize(payload))
+  packer:pushValue(payload or "")
+  local data = packer:serialize()
+  local packet = Packet:new(udpProtocol, _G.IP.constants.broadcastIP, port, data, nil, skipRegistration)
   multiport.broadcast(packet, skipRegistration)
 end
 

@@ -2,6 +2,7 @@
 local util = require("IP.IPUtil")
 local APIPA = require("IP.protocols.APIPA")
 local udp = require("IP.protocols.UDP")
+local hyperPack = require("hyperpack")
 
 local dhcp = {}
 
@@ -61,9 +62,11 @@ function dhcp.registerIfNeeded()
     --------------------------------------------------------------------------------
     _G.IP.logger.write("#[DHCP] DHCP registration success.")
     _G.DHCP.DHCPRegisteredModems[addr]        = true
-    _G.IP.modems[addr].clientIP               = message.data.registeredIP
-    _G.IP.modems[addr].subnetMask             = message.data.subnetMask
-    _G.IP.modems[addr].defaultGateway         = message.data.defaultGateway
+    print(message.data)
+    local packer = hyperPack:new():deserializeIntoClass(message.data)
+    _G.IP.modems[addr].clientIP               = packer:popValue()
+    _G.IP.modems[addr].subnetMask             = packer:popValue()
+    _G.IP.modems[addr].defaultGateway         = packer:popValue()
     _G.IP.logger.write("IP: " .. util.toUserFormat(_G.IP.modems[addr].clientIP))
     _G.IP.logger.write("Subnet Mask: " .. util.toUserFormat(_G.IP.modems[addr].subnetMask))
     _G.IP.logger.write("Default Gateway: " .. util.toUserFormat(_G.IP.modems[addr].defaultGateway))

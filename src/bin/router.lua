@@ -122,15 +122,13 @@ DHCP.release()
 _G.IP.modems[addr].clientIP = _G.IP.modems[addr].defaultGateway
 print("IP set to " .. IPUtil.toUserFormat(_G.IP.modems[addr].clientIP))
 
-local event = require("event")
-local serialization = require("serialization")
-local util = require("IP.IPUtil")
+local api  = require("IP.netAPI")
+local tableUtil = require("tableutil")
 
-event.listen("multiport_message", function(_, _, _, _, _, message)
-  if(serialization.unserialize(message).targetIP ~= util.fromUserFormat("0000:0000:0000:0000") and -- Check for broadcasts and filter out.
-    serialization.unserialize(message).targetIP ~= util.fromUserFormat("FFFF:FFFF:FFFF:FFFF")
+api.registerReceivingCallback(function(message) -- Check for broadcasts and filter out.
+  if(not (tableUtil.tableContainsItem({_G.IP.constants.broadcastIP, _G.IP.constants.internalIP}, message.header.senderIP)
+    and tableUtil.tableContainsItem({_G.IP.constants.broadcastIP, _G.IP.constants.internalIP}, message.header.targetIP))
   ) then
-    local packet = serialization.unserialize(message)
     -- TODO: Implement RIPv2 for routing.
   end
 end)

@@ -10,8 +10,9 @@ end
 
 local event = require("event")
 local buttonLib = require("button")
-local serialization = require("serialization")
+local serialization = require("IP.serializationUnsafe")
 local ipUtil = require("IP.IPUtil")
+local api    = require("IP.netAPI")
 
 gpu.setResolution(resX, resY)
 
@@ -132,19 +133,19 @@ local function drawEntryScreen()
 end
 
 local function inferProtocolFromPacket(packet)
-  if(packet.protocol == 1) then
+  if(packet.header.protocol == 1) then
     return "ICMP"
-  elseif(packet.protocol == 2) then
+  elseif(packet.header.protocol == 2) then
     return "ARP"
-  elseif(packet.protocol == 3) then
+  elseif(packet.header.protocol == 3) then
     --unassigned somehow
     return "Unk."
-  elseif(packet.protocol == 4) then
+  elseif(packet.header.protocol == 4) then
     if(packet.udpProto == 1) then
       return "DHCP"
     end
     return "UDP"
-  elseif(packet.protocol == 5) then
+  elseif(packet.header.protocol == 5) then
     return "TCP"
   end
   return "Unk."
@@ -159,21 +160,21 @@ local function inferInfoFromPacket(packet)
       return "Echo (ping) reply", 0xCCB6FF
     end
   elseif(protocol == "ARP") then
-    if(packet.targetIP == ipUtil.fromUserFormat("FFFF:FFFF:FFFF:FFFF")) then
-      return "Who has " .. ipUtil.toUserFormat(packet.data) .. "? Tell " .. ipUtil.toUserFormat(packet.senderIP), 0xFFFFC0
+    if(packet.header.targetIP == ipUtil.fromUserFormat(_G.IP.constants.broadcastIP)) then
+      return "Who has " .. ipUtil.toUserFormat(packet.data) .. "? Tell " .. ipUtil.toUserFormat(packet.header.senderIP), 0xFFFFC0
     else
-      return ipUtil.toUserFormat(packet.senderIP) .. " is at " .. packet.data, 0xFFFFC0
+      return ipUtil.toUserFormat(packet.header.senderIP) .. " is at " .. packet.data, 0xFFFFC0
     end
   elseif(protocol == "UDP") then
-    return packet.senderPort .. " → " .. packet.targetPort .. " " .. "Len=" .. (packet.udpLength or "Unk."), 0xCCFFFF
+    return packet.header.senderPort .. " → " .. packet.header.targetPort .. " " .. "Len=" .. (packet.udpLength or "Unk."), 0xCCFFFF
   elseif(protocol == "DHCP") then
     if(packet.data == 0x10) then
       return "DHCP Release", 0xCCFFFF
     elseif(packet.data == 0x11) then
       return "DHCP Flush", 0xCCFFFF
-    elseif(packet.targetPort == 67) then
+    elseif(packet.header.targetPort == 67) then
       return "DHCP Request", 0xCCFFFF
-    elseif(packet.targetPort == 68) then
+    elseif(packet.header.targetPort == 68) then
       return "DHCP Response", 0xCCFFFF
     end
   elseif(protocol == "TCP") then
@@ -198,20 +199,20 @@ local function drawInterfaceScreen()
         gpu.set(2, 4 + i - scroll - 1,
           makeSize(i, 6) .. " " ..
             makeSize(math.floor(v.time*100)/100, 9) .. " " ..
-            makeSize(ipUtil.toUserFormat(v.packet.senderIP) or "nil", 19) .. "  " ..
-            makeSize(ipUtil.toUserFormat(v.packet.targetIP) or "nil", 19) .. "  " ..
+            makeSize(ipUtil.toUserFormat(v.packet.header.senderIP) or "nil", 19) .. "  " ..
+            makeSize(ipUtil.toUserFormat(v.packet.header.targetIP) or "nil", 19) .. "  " ..
             makeSize(inferProtocolFromPacket(v.packet), 8) .. "  " ..
-            makeSize(#serialization.serialize(v.packet), 6) .. "   " ..
+            makeSize(#serialization.serialize(v.packet), 6) .. "   " .. -- TODO: Change to hyperpack!
             text
         )
       else
         gpu.set(2, 4 + i - scroll - 1,
           makeSize(i, 6) .. " " ..
             makeSize(math.floor(v.time*100)/100, 9) .. " " ..
-            makeSize(ipUtil.toUserFormat(v.packet.senderIP) or "nil", 19) .. "  " ..
-            makeSize(ipUtil.toUserFormat(v.packet.targetIP) or "nil", 19) .. "  " ..
+            makeSize(ipUtil.toUserFormat(v.packet.header.senderIP) or "nil", 19) .. "  " ..
+            makeSize(ipUtil.toUserFormat(v.packet.header.targetIP) or "nil", 19) .. "  " ..
             makeSize(inferProtocolFromPacket(v.packet), 8) .. "  " ..
-            makeSize(#serialization.serialize(v.packet), 6)
+            makeSize(#serialization.serialize(v.packet), 6) -- TODO: Change to hyperpack!
         )
       end
     end
@@ -246,27 +247,25 @@ local function updateNetworkIndicator(receiverMAC, senderMAC)
   end
 end
 
-local function onNetworkEvent(_, receiverMAC, senderMAC, _, dist, message)
-  updateNetworkIndicator(receiverMAC, senderMAC)
-  if(status == 1 and selectedInterface == receiverMAC and capturing) then
-    message = serialization.unserialize(message)
+local function onNetworkEvent(message, dist)
+  updateNetworkIndicator(message.header.receiverMAC, message.header.senderMAC)
+  if(status == 1 and selectedInterface == message.header.receiverMAC and capturing) then
     packetsOnInterface[#packetsOnInterface + 1] = {dist = dist, packet = message, time = require("computer").uptime() - interfaceStartTime}
   end
 end
 
-local function onNetworkSent(_, receiverMAC, senderMAC, _, dist, message)
-  updateNetworkIndicator(receiverMAC, senderMAC)
-  if(status == 1 and selectedInterface == senderMAC and capturing) then
+local function onNetworkSent(message)
+  updateNetworkIndicator(message.header.receiverMAC, message.header.senderMAC)
+  if(status == 1 and selectedInterface == message.header.senderMAC and capturing) then
     message = serialization.unserialize(message)
-    packetsOnInterface[#packetsOnInterface + 1] = {dist = dist, packet = message, time = require("computer").uptime() - interfaceStartTime}
+    packetsOnInterface[#packetsOnInterface + 1] = {dist = 0, packet = message, time = require("computer").uptime() - interfaceStartTime}
   end
 end
 
-local function onNetworkBroadcast(_, receiverMAC, senderMAC, _, dist, message)
-  updateNetworkIndicator(receiverMAC, senderMAC)
-  if(status == 1 and selectedInterface == senderMAC and capturing) then
-    message = serialization.unserialize(message)
-    packetsOnInterface[#packetsOnInterface + 1] = {dist = dist, packet = message, time = require("computer").uptime() - interfaceStartTime}
+local function onNetworkBroadcast(message)
+  updateNetworkIndicator(message.header.receiverMAC, message.header.senderMAC)
+  if(status == 1 and selectedInterface == message.header.senderMAC and capturing) then
+    packetsOnInterface[#packetsOnInterface + 1] = {dist = 0, packet = message, time = require("computer").uptime() - interfaceStartTime}
   end
 end
 
@@ -278,9 +277,9 @@ writeTopBar()
 drawEntryScreen()
 writeToScreen()
 
-local networkEvent = event.listen("multiport_message", onNetworkEvent)
-local networkSent = event.listen("multiport_sent", onNetworkSent)
-local networkBroadcast = event.listen("multiport_broadcast", onNetworkBroadcast)
+local networkEvent = api.registerReceivingCallback(onNetworkEvent)
+local networkSent = api.registerUnicastSendingCallback(onNetworkSent)
+local networkBroadcast = api.registerBroadcastSendingCallback(onNetworkBroadcast)
 
 local running = true
 
@@ -311,9 +310,9 @@ buttonLib.stop()
 
 gpu.setActiveBuffer(0)
 
-event.cancel(networkEvent)
-event.cancel(networkSent)
-event.cancel(networkBroadcast)
+api.unregisterCallback(networkEvent)
+api.unregisterCallback(networkSent)
+api.unregisterCallback(networkBroadcast)
 event.cancel(interruptedListener)
 
 gpu.freeBuffer(buffer)

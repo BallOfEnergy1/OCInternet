@@ -72,11 +72,17 @@ function util.createIP(subnet, ID)
 end
 
 function util.getSubnet(IP)
+  if(type(IP) ~= "number") then
+    error(debug.traceback("IP not numerical (" .. tostring(IP) .. ")."))
+  end
   local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
   return IP & _G.IP.modems[addr].subnetMask
 end
 
 function util.getID(IP)
+  if(type(IP) ~= "number") then
+    error(debug.traceback("IP not numerical (" .. tostring(IP) .. ")."))
+  end
   local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
   return IP & (~_G.IP.modems[addr].subnetMask)
 end
@@ -96,8 +102,8 @@ function Modem:new(clientIP, subnetMask, defaultGateway, MAC, modem)
   o.clientIP = clientIP
   o.subnetMask = subnetMask
   o.defaultGateway = defaultGateway
-  o.MAC  = MAC
-  o.modem   = modem
+  o.MAC = MAC
+  o.modem = modem
   return o
 end
 
@@ -108,6 +114,11 @@ function util.setup(config)
     require("filesystem").makeDirectory("/var/ip") -- TODO get rid of this bs
     _G.IP = {}
     do
+      _G.IP.constants = {
+        broadcastMAC = "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF",    -- Broadcast MAC
+        broadcastIP = util.fromUserFormat("FFFF:FFFF:FFFF:FFFF"), -- Broadcast IP
+        internalIP = util.fromUserFormat("0000:0000:0000:0000")   -- Used internally for protocols lower than IPv5 or DHCP (IPs are required).
+      }
       _G.IP.logger = logutil.initLogger("IPv5", "/var/ip/ip.log")
       _G.IP.modems = {}
       local list = component.list("modem")
@@ -126,7 +137,7 @@ function util.setup(config)
         end
       end
     end
-    packetFrag.setup()
+    packetFrag.setup(config)
     _G.IP.isInitialized = true
   end
 end

@@ -1,13 +1,13 @@
 
 local packetFrag = require("IP.packetFrag")
 local util = require("IP.IPUtil")
-local serialization = require("serialization")
+local tableUtil = require("tableutil")
 
 local subnet = {}
 
 function subnet.send(MAC, port, packet)
   local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
-  if(util.getSubnet(packet.senderIP) ~= util.getSubnet(_G.IP.modems[addr].clientIP)) then
+  if(util.getSubnet(packet.header.senderIP) ~= util.getSubnet(_G.IP.modems[addr].clientIP)) then
     packetFrag.send(require("IP.protocols.ARP").resolve(_G.IP.defaultGateway, true), port, packet)
   else
     packetFrag.send(MAC, port, packet)
@@ -18,13 +18,12 @@ function subnet.broadcast(port, packet)
   packetFrag.broadcast(port, packet)
 end
 
-function subnet.receive(_, b, c, targetPort, d, message)
-  local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
-  if(util.getSubnet(serialization.unserialize(message).senderIP) == util.getSubnet(_G.IP.modems[addr].clientIP)
-    or serialization.unserialize(message).targetIP == util.fromUserFormat("FFFF:FFFF:FFFF:FFFF") -- Broadcast
-    or serialization.unserialize(message).targetIP == util.fromUserFormat("0000:0000:0000:0000") -- Used internally for protocols lower than IPv4.1 or DHCP.
-  ) then
-    require("IP.multiport").process(_, b, c, targetPort, d, message)
+function subnet.receive(receiverMAC, targetPort, dist, message)
+  ---@type Packet
+  local packet = message
+  if(util.getSubnet(packet.header.senderIP) == util.getSubnet(_G.IP.modems[receiverMAC].clientIP)
+    or tableUtil.tableContainsItem({_G.IP.constants.broadcastIP, _G.IP.constants.internalIP}, packet.header.targetIP)) then
+    require("IP.multiport").process(targetPort, dist, message)
   end
 end
 

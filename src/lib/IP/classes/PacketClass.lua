@@ -7,19 +7,23 @@ local Packet = {
     targetMAC = nil,
     senderMAC = nil,
     senderIP = nil,
-    targetIP = nil
+    targetIP = nil,
+    seq = 1,
+    seqEnd = true,
   },
   data = nil
 }
 
 local hyperPack = require("hyperpack")
 
-function Packet:new(_, protocol, targetIP, targetPort, data, MAC, noReg)
+function Packet:new(protocol, targetIP, targetPort, data, MAC, noReg)
   local o = {}
   setmetatable(o, self)
   self.__index = self
   if(protocol == nil) then
     -- Assume overload
+    o.header = {}
+    o.data = nil
     return o
   end
   if(not noReg) then
@@ -29,9 +33,8 @@ function Packet:new(_, protocol, targetIP, targetPort, data, MAC, noReg)
   local dynPort = math.floor(math.random(49152, 65535)) -- Random dynamic port.
   o.header.senderPort = dynPort
   o.header.targetPort = targetPort
-  local broadcast = require("IP.IPUtil").fromUserFormat("FFFF:FFFF:FFFF:FFFF")
-  if(targetIP == broadcast) then
-    o.header.targetMAC = broadcast
+  if(targetIP == _G.IP.constants.broadcastIP) then
+    o.header.targetMAC = _G.IP.constants.broadcastMAC
   else
     o.header.targetMAC = MAC or require("IP.protocols.ARP").resolve(targetIP)
   end
@@ -40,38 +43,57 @@ function Packet:new(_, protocol, targetIP, targetPort, data, MAC, noReg)
   o.header.senderIP   = _G.IP.modems[addr].clientIP
   o.header.targetIP   = targetIP
   o.data              = data
+  o.seq = 1
+  o.seqEnd = true
   return o
 end
 
-local fragLimit = 255 -- Limit packets to fragmenting 10 times.
+function Packet:serialize()
+  assert(type(self.data) ~= "table", "Packet data expected string, got " .. type(self.data) .. ".")
+  local packer = hyperPack:new()
+  packer:pushValue({self.header, self.data})
+  local fullPacket = packer:serialize()
+  return fullPacket
+end
 
 function Packet:serializeAndFragment(MTU)
   
-  assert(type(self.data) == "string", "Packet data expected string, got " .. type(self.data) .. ".")
+  assert(type(self.data) ~= "table", "Packet data expected string, got " .. type(self.data) .. ".")
   
   local packer = hyperPack:new()
-  packer:pushValue(self.header)
-  packer:pushValue(-1) -- seq
-  packer:pushValue(false) -- seqEnd
+  packer:pushValue(self.header.protocol)
+  packer:pushValue(self.header.senderPort)
+  packer:pushValue(self.header.targetPort)
+  packer:pushValue(self.header.targetMAC)
+  packer:pushValue(self.header.senderMAC)
+  packer:pushValue(self.header.senderIP)
+  packer:pushValue(self.header.targetIP)
+  packer:pushValue(self.header.seq)
+  packer:pushValue(self.header.seqEnd)
   local header = packer:serialize()
-  packer:pushValue(self.data)
+  packer:pushValue(self.data or "")
   local fullPacket = packer:serialize()
   
   if(#fullPacket > MTU) then
     local packetsToSend = {}
     
-    if(#fullPacket + (#header * fragLimit) > fragLimit * MTU) then
+    local fragLimit = _G.FRAG.fragmentLimit
+    
+    if(#fullPacket + (#header * (fragLimit - 1)) > fragLimit * MTU) then
       error("Sent packet would exceed fragmentation limit (" .. fragLimit .. "*" .. MTU .. ").") -- Well shit...
     end
     
-    local seq = 0
+    local seq = 1
     local data = self.data
     while seq < fragLimit - 1 and #data > 1 do
       local toSend = data:sub(0, MTU - #header)
       packer:removeLastEntry(3)
-      packer:pushValue({seq, #data:sub(MTU - #header) == 0, toSend})
+      packer:pushValue(seq)
+      packer:pushValue(#data:sub(MTU - #header) == 0)
+      packer:pushValue(toSend)
       packetsToSend[#packetsToSend + 1] = packer:serialize()
       data = data:sub(MTU - #header)
+      seq = seq + 1
     end
     return packetsToSend
   end
@@ -86,23 +108,24 @@ function Packet:buildFromHyperPack(hyperPackClass)
   self.header.senderMAC = hyperPackClass:popValue()
   self.header.senderIP = hyperPackClass:popValue()
   self.header.targetIP = hyperPackClass:popValue()
+  self.header.seq = hyperPackClass:popValue()
+  self.header.seqEnd = hyperPackClass:popValue()
   self.data = hyperPackClass:popValue()
   return self
 end
 
-function Packet:buildFromPacketTable(tableOfPackets)
-  
-  assert(type(tableOfPackets) == "table", "Packet table expected, got " .. type(self.data) .. ".")
-  
-  for i, v in pairs(tableOfPackets) do
-    local packedString = hyperPack:new()
-    packedString:deserializeIntoClass(v)
-    local vPacket = Packet:new()
-    vPacket:buildFromHyperPack(packedString)
-    packedString = nil -- Destroy object since it is no longer of use.
-    self.data = self.data .. vPacket.data
-  end
-  
+function Packet:copyFrom(otherPacket)
+  self.header.protocol = otherPacket.header.protocol
+  self.header.senderPort = otherPacket.header.senderPort
+  self.header.targetPort = otherPacket.header.targetPort
+  self.header.targetMAC = otherPacket.header.targetMAC
+  self.header.senderMAC = otherPacket.header.senderMAC
+  self.header.senderIP = otherPacket.header.senderIP
+  self.header.targetIP = otherPacket.header.targetIP
+  self.header.seq = otherPacket.header.seq
+  self.header.seqEnd = otherPacket.header.seqEnd
+  self.data = otherPacket.data -- please be a string
+  return self
 end
 
 return Packet

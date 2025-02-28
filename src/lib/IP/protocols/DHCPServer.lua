@@ -4,6 +4,7 @@ local Packet = require("IP.classes.PacketClass")
 local multiport = require("IP.multiport")
 local tableUtil = require("tableutil")
 local udp = require("IP.protocols.UDP")
+local hyperPack = require("hyperpack")
 
 local dhcpServerPort = 67
 local dhcpClientPort = 68
@@ -21,23 +22,23 @@ end
 
 local function onDHCPMessage(receivedPacket)
   if(receivedPacket.data == 0x10) then
-    if(not _G.DHCP.allRegisteredMACs[receivedPacket.senderMAC]) then
+    if(not _G.DHCP.allRegisteredMACs[receivedPacket.header.senderMAC]) then
       return
     end
-    _G.DHCP.IPIndex = _G.DHCP.allRegisteredMACs[receivedPacket.senderMAC].index
-    _G.DHCP.allRegisteredMACs[receivedPacket.senderMAC] = {}
+    _G.DHCP.IPIndex = _G.DHCP.allRegisteredMACs[receivedPacket.header.senderMAC].index
+    _G.DHCP.allRegisteredMACs[receivedPacket.header.senderMAC] = {}
     return
   end
-  _G.IP.logger.write("#[DHCPServer] Recieved DHCP request from '" .. receivedPacket.senderMAC .. "'.")
+  _G.IP.logger.write("#[DHCPServer] Recieved DHCP request from '" .. receivedPacket.header.senderMAC .. "'.")
   local IP
-  if(_G.DHCP.allRegisteredMACs[receivedPacket.senderMAC] == nil) then
-    _G.DHCP.allRegisteredMACs[receivedPacket.senderMAC] = {}
+  if(_G.DHCP.allRegisteredMACs[receivedPacket.header.senderMAC] == nil) then
+    _G.DHCP.allRegisteredMACs[receivedPacket.header.senderMAC] = {}
   end
-  if(_G.DHCP.allRegisteredMACs[receivedPacket.senderMAC] ~= nil) then
-    IP = _G.DHCP.allRegisteredMACs[receivedPacket.senderMAC].ip
+  if(_G.DHCP.allRegisteredMACs[receivedPacket.header.senderMAC] ~= nil) then
+    IP = _G.DHCP.allRegisteredMACs[receivedPacket.header.senderMAC].ip
   end
   for MAC, reservedIP in pairs(_G.DHCP.userReservedIPs) do
-    if(MAC == receivedPacket.senderMAC and reservedIP ~= nil) then
+    if(MAC == receivedPacket.header.senderMAC and reservedIP ~= nil) then
       IP = reservedIP
     end
   end
@@ -54,10 +55,15 @@ local function onDHCPMessage(receivedPacket)
   end
   _G.IP.logger.write("#[DHCPServer] Sending IP '" .. IP .. "' to client.")
   local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
-  local packet = Packet:new(nil, 4 --[[ UDP ]], 0, dhcpClientPort, {registeredIP = IP, subnetMask = _G.DHCP.providedSubnetMask, defaultGateway = _G.IP.modems[addr].defaultGateway}, receivedPacket.senderMAC)
+  local packer = hyperPack:new()
+  packer:pushValue(IP)
+  packer:pushValue(_G.DHCP.providedSubnetMask)
+  packer:pushValue(_G.IP.modems[addr].defaultGateway)
+  local data = packer:serialize()
+  local packet = Packet:new(4 --[[ UDP ]], 0, dhcpClientPort, data, receivedPacket.header.senderMAC)
   packet.udpProto = 1
   multiport.send(packet)
-  _G.DHCP.allRegisteredMACs[receivedPacket.senderMAC] = {ip = IP, index = _G.DHCP.IPIndex}
+  _G.DHCP.allRegisteredMACs[receivedPacket.header.senderMAC] = {ip = IP, index = _G.DHCP.IPIndex}
 end
 
 function dhcpServer.addReservedIP(MAC, IP)
@@ -77,9 +83,9 @@ function dhcpServer.setup(config)
   _G.DHCP.userReservedIPs = config.DHCPServer.reservedIPs
   _G.DHCP.allRegisteredMACs = {}
   _G.DHCP.systemReservedIPs = {
-    0,
-    1,
-    0xFFFFFFFFFF  -- IP #0, #1, and the last IP in the system.
+    0, -- IP 0
+    1, -- IP 1
+    ~_G.DHCP.providedSubnetMask -- Last IP in the system.
   }
   udp.UDPListen(dhcpServerPort, function(packet)
     if(packet.udpProto == dhcpUDPProtocol) then

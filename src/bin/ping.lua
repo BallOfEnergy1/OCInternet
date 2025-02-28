@@ -67,18 +67,10 @@ if(args[1] ~= nil and type(args[1]) == "string") then -- Take as IP.
     local payload = makePayload(payloadSize)
     for i = 1, count do
       local pcTime = require("computer").uptime()
-      local uptime;
-      local response, code;
-      if(IP == (_G.ROUTE and _G.ROUTE.routeModem.clientIP or _G.IP.primaryModem.clientIP)) then
-        response = true
-      else
-        response, code = ICMP.send(IP, 0x1A, payload, true)
-      end
+      local uptime
+      local response
+      response = ICMP.send(IP, 0x1A, payload, true)
       if(response == nil) then
-        if(code == -1) then
-          printInfo(util.toUserFormat(IP), pings)
-          return
-        end
         print("Ping timed out.")
         table.insert(pings, {received=false})
       else

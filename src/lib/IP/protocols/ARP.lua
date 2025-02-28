@@ -1,9 +1,8 @@
 
 local multiport = require("IP.multiport")
-local serialization = require("serialization")
 local event = require("event")
+local api = require("IP.netAPI")
 local Packet = require("IP.classes.PacketClass")
-local util = require("IP.IPUtil")
 
 local arpPort = 3389
 local arpProtocol = 2
@@ -15,7 +14,7 @@ local timeout = 300
 local function onARPMessage(receivedPacket)
   local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
   if(receivedPacket.data == _G.IP.modems[addr].clientIP) then
-    multiport.send(Packet:new(nil, arpProtocol, receivedPacket.senderIP, arpPort, _G.IP.modems[addr].MAC, receivedPacket.senderMAC))
+    multiport.send(Packet:new(arpProtocol, receivedPacket.header.senderIP, arpPort, _G.IP.modems[addr].MAC, receivedPacket.header.senderMAC))
   end
 end
 
@@ -31,16 +30,13 @@ function arp.resolve(IP, skipRegistration)
       arp.trimCache()
     end
   end
-  local packet = Packet:new(nil, arpProtocol, util.fromUserFormat("FFFF:FFFF:FFFF:FFFF"), arpPort, IP, nil, skipRegistration)
-  local raw, code = multiport.requestMessageWithTimeout(packet, true, true, 3, 1,
-    function(_, _, _, targetPort, _, message) return targetPort == arpPort and serialization.unserialize(message).protocol == arpProtocol end)
-  if(raw == nil) then
-    if(code == -1) then
-      return nil, code
-    end
-    return raw
+  local packet = Packet:new(arpProtocol, _G.IP.constants.broadcastIP, arpPort, IP, nil, skipRegistration)
+  local message = multiport.requestMessageWithTimeout(packet, true, true, 3, 1,
+    function(message) return message.header.targetPort == arpPort and message.header.protocol == arpProtocol end)
+  if(message == nil) then
+    return nil
   end
-  return serialization.unserialize(raw).data
+  return message.data
 end
 
 function arp.trimCache()
@@ -52,18 +48,19 @@ function arp.trimCache()
 end
 
 function arp.updateCache(packet)
-  if(packet.senderIP == util.fromUserFormat("FFFF:FFFF:FFFF:FFFF") or packet.targetIP == util.fromUserFormat("FFFF:FFFF:FFFF:FFFF")) then
+  if(packet.header.senderIP == _G.IP.constants.broadcastIP or packet.header.targetIP == _G.IP.constants.broadcastIP) then
     return
   end
-  if(packet.senderIP == util.fromUserFormat("0000:0000:0000:0000") or packet.targetIP == util.fromUserFormat("0000:0000:0000:0000")) then    return
+  if(packet.header.senderIP == _G.IP.constants.internalIP or packet.header.targetIP == _G.IP.constants.internalIP) then
+    return
   end
   for MAC, IPtable in pairs(_G.ARP.cachedMappings) do
-    if(IPtable.IP == packet.senderIP and MAC == packet.senderMAC) then
+    if(IPtable.IP == packet.header.senderIP and MAC == packet.header.senderMAC) then
       IPtable.timeout = getTimeout(timeout)
     end
   end
   -- IP not found on network.
-  _G.ARP.cachedMappings[packet.senderMAC] = {IP = packet.senderIP, timeout = getTimeout(timeout)} -- 5 minutes (normally would be 240 but bro what this is OC).
+  _G.ARP.cachedMappings[packet.header.senderMAC] = {IP = packet.header.senderIP, timeout = getTimeout(timeout)} -- 5 minutes (normally would be 240 but bro what this is OC).
   return
 end
 
@@ -76,10 +73,11 @@ function arp.setup()
       }
     end
     _G.ARP.isInitialized = true
-    event.listen("multiport_message", function(_, _, _, targetPort, _, message)
-      arp.updateCache(serialization.unserialize(message))
-      if(targetPort == arpPort and serialization.unserialize(message).protocol == arpProtocol) then
-        onARPMessage(serialization.unserialize(message))
+    
+    _G.ARP.callback = api.registerReceivingCallback(function(message)
+      arp.updateCache(message)
+      if(message.header.targetPort == arpPort and message.header.protocol == arpProtocol) then
+        onARPMessage(message)
       end
     end)
     event.timer(timeout * 1.5, arp.trimCache, math.huge)
