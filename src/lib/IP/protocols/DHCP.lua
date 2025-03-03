@@ -23,7 +23,7 @@ function dhcp.setup(config)
       _G.DHCP.DHCPRegisteredModems = {}
       _G.DHCP.static         = config.DHCP.static
     end
-    udp.UDPListen(dhcpClientPort, function(receivedPacket)
+    _G.DHCP.callback = udp.UDPListen(dhcpClientPort, function(receivedPacket)
       if(receivedPacket.udpProto == dhcpUDPProtocol and receivedPacket.data == 0x11) then
         dhcp.release()
       end
@@ -41,19 +41,13 @@ function dhcp.registerIfNeeded()
   if(not _G.DHCP.DHCPRegisteredModems[addr]) then
     _G.IP.modems[addr].clientIP = 0
     local attempts = 2
-    local message, code
+    local message
     for _ = 1, attempts do
       udp.broadcast(dhcpServerPort, nil, dhcpUDPProtocol, true)
-      message, code = udp.pullUDP(dhcpClientPort, 2)
+      message = udp.pullUDP(dhcpClientPort, 2)
       if(message and message.udpProto == dhcpUDPProtocol) then
         break
       end
-      if(code == -1) then
-        break
-      end
-    end
-    if(code == -1) then
-      return nil, code
     end
     if(not message) then
       _G.IP.logger.write("#[DHCP] DHCP Failed (" .. attempts .. " tries), defaulting to APIPA.")
@@ -62,7 +56,6 @@ function dhcp.registerIfNeeded()
     --------------------------------------------------------------------------------
     _G.IP.logger.write("#[DHCP] DHCP registration success.")
     _G.DHCP.DHCPRegisteredModems[addr]        = true
-    print(message.data)
     local packer = hyperPack:new():deserializeIntoClass(message.data)
     _G.IP.modems[addr].clientIP               = packer:popValue()
     _G.IP.modems[addr].subnetMask             = packer:popValue()

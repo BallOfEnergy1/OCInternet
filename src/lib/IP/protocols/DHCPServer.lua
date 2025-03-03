@@ -1,7 +1,5 @@
 local DHCP = require("IP.protocols.DHCP")
 local util = require("IP.IPUtil")
-local Packet = require("IP.classes.PacketClass")
-local multiport = require("IP.multiport")
 local tableUtil = require("tableutil")
 local udp = require("IP.protocols.UDP")
 local hyperPack = require("hyperpack")
@@ -60,9 +58,7 @@ local function onDHCPMessage(receivedPacket)
   packer:pushValue(_G.DHCP.providedSubnetMask)
   packer:pushValue(_G.IP.modems[addr].defaultGateway)
   local data = packer:serialize()
-  local packet = Packet:new(4 --[[ UDP ]], 0, dhcpClientPort, data, receivedPacket.header.senderMAC)
-  packet.udpProto = 1
-  multiport.send(packet)
+  udp.send(0, dhcpClientPort, data, dhcpUDPProtocol, false, receivedPacket.header.senderMAC)
   _G.DHCP.allRegisteredMACs[receivedPacket.header.senderMAC] = {ip = IP, index = _G.DHCP.IPIndex}
 end
 
@@ -87,7 +83,7 @@ function dhcpServer.setup(config)
     1, -- IP 1
     ~_G.DHCP.providedSubnetMask -- Last IP in the system.
   }
-  udp.UDPListen(dhcpServerPort, function(packet)
+  _G.DHCP.serverCallback = udp.UDPListen(dhcpServerPort, function(packet)
     if(packet.udpProto == dhcpUDPProtocol) then
       onDHCPMessage(packet)
     end

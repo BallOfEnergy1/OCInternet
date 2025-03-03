@@ -1,12 +1,13 @@
 ---@class Callback
 local Callback = {
   id = "",
+  name = "",
   callback = function()  end,
   amountCalled = 0,
   errorHandler = function(error) _G.IP.logger.write(debug.traceback(error)) end
 }
 
-function Callback:new(callback, errorHandler)
+function Callback:new(callback, errorHandler, name)
   local o = {}
   setmetatable(o, self)
   self.__index = self
@@ -17,6 +18,7 @@ function Callback:new(callback, errorHandler)
     o.errorHandler = function(error) _G.IP.logger.write(debug.traceback(error)) end
   end
   o.id = require("UUID").next()
+  o.name = name or "Unnamed (" .. o.id:sub(1, 8) .. ")"
   o.amountCalled = 0
   return o
 end

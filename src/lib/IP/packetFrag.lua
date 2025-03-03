@@ -5,6 +5,7 @@ local event = require("event")
 local hyperPack = require("hyperpack")
 local Stack = require("IP.classes.StackClass")
 local Packet = require("IP.classes.PacketClass")
+local tableUtil = require("tableutil")
 
 local fragmentation = {}
 
@@ -27,6 +28,9 @@ local function fragmentPacket(modem, port, packet, MAC)
   ---@type Packet
   local packetToSend = packet
   for _, v in pairs(packetToSend:serializeAndFragment(MTU)) do
+    if(#v > MTU) then
+      error("Packet fragmented incorrectly, size " .. #v .. " > " .. MTU)
+    end
     if(MAC) then
       modem.send(MAC, port, v)
     else
@@ -67,6 +71,14 @@ function fragmentation.receive(_, receiverMAC, _, targetPort, dist, message)
   instance:deserializeIntoClass(message)
   local temporaryPacket = Packet:new()
   temporaryPacket:buildFromHyperPack(instance)
+  if(temporaryPacket.header.targetMAC ~= receiverMAC and temporaryPacket.header.targetMAC ~= _G.IP.constants.broadcastMAC) then
+    temporaryPacket = nil
+    return
+  end
+  if(temporaryPacket.header.targetIP ~= _G.IP.modems[receiverMAC].clientIP and tableUtil.tableContainsItem({_G.IP.constants.internalIP, _G.IP.constants.internalIP}, temporaryPacket.header.targetIP)) then
+    temporaryPacket = nil
+    return
+  end
   if(_G.FRAG[receiverMAC][temporaryPacket.header.targetIP] == nil) then
     _G.FRAG[receiverMAC][temporaryPacket.header.targetIP] = {}
   end

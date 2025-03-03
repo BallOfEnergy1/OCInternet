@@ -9,16 +9,7 @@ local udpProtocol = 4
 
 local udp = {}
 
-function udp.setup()
-  if(not _G.UDP or not _G.UDP.isInitialized) then
-    _G.UDP = {}
-    _G.UDP.listeners = {}
-    _G.UDP.isInitialized = true
-  end
-end
-
 function udp.UDPListen(port, callback)
-  udp.setup()
   local func = function(message)
     if(message.header.targetPort == port and message.header.protocol == udpProtocol) then
       local packer = hyperPack:new():deserializeIntoClass(message.data)
@@ -29,18 +20,12 @@ function udp.UDPListen(port, callback)
       callback(tempPacket)
     end
   end
-  local callbackObject = api.registerReceivingCallback(func)
-  _G.UDP.listeners[port] = callbackObject
+  local callbackObject = api.registerReceivingCallback(func, nil, nil, "UDP Callback Listener (Port " .. port .. ")")
+  return callbackObject
 end
 
-function udp.UDPIgnore(port)
-  udp.setup()
-  if(not _G.UDP.listeners[port]) then
-    return false
-  end
-  local success = api.unregisterCallback(_G.UDP.listeners[port])
-  _G.UDP.listeners[port] = nil
-  return success
+function udp.UDPIgnore(callbackObject)
+  api.unregisterCallback(callbackObject)
 end
 
 function udp.pullUDP(port, timeout, callback)
@@ -60,13 +45,13 @@ function udp.pullUDP(port, timeout, callback)
   end
 end
 
-function udp.send(IP, port, payload, protocol, skipRegistration)
+function udp.send(IP, port, payload, protocol, skipRegistration, MAC)
   local packer = hyperPack:new()
   packer:pushValue(protocol)
   packer:pushValue(#serialization.serialize(payload))
   packer:pushValue(payload)
   local data = packer:serialize()
-  local packet = Packet:new(udpProtocol, IP, port, data, nil, skipRegistration)
+  local packet = Packet:new(udpProtocol, IP, port, data, MAC, skipRegistration)
   multiport.send(packet, skipRegistration)
 end
 

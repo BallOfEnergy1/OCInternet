@@ -77,7 +77,7 @@ function Session:new(IP, port, seq, ack)
         self:acceptFinalization()
       end
     end
-  end)
+  end, nil, nil, "TCP Listener (" .. id:sub(1, 8) .. ")")
   return o
 end
 
@@ -107,7 +107,7 @@ function tcp.setup()
         session.status = "SYN-RECEIVED"
         session:acceptConnection(message)
       end
-    end)
+    end, nil, nil, "TCP Handler")
   end
 end
 
@@ -317,7 +317,7 @@ function Session:attachListener(callback)
     if(message.header.targetPort == self.targetPort and message.header.protocol == tcpProtocol) then
       callback(message)
     end
-  end)
+  end, nil, nil, "TCP Callback Listener (Port " .. self.targetPort .. ")")
 end
 
 function Session:pull(timeout, callback)

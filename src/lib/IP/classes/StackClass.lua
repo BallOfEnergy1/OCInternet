@@ -31,8 +31,8 @@ end
 
 function Stack:pop()
   local data = self:peek()
-  self.size = self.size - 1
   self.data[self.size] = nil;
+  self.size = self.size - 1
   return data
 end
 

@@ -3,6 +3,7 @@ local multiport = require("IP.multiport")
 local event = require("event")
 local api = require("IP.netAPI")
 local Packet = require("IP.classes.PacketClass")
+local hyperPack = require("hyperpack")
 
 local arpPort = 3389
 local arpProtocol = 2
@@ -13,8 +14,13 @@ local timeout = 300
 
 local function onARPMessage(receivedPacket)
   local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
-  if(receivedPacket.data == _G.IP.modems[addr].clientIP) then
-    multiport.send(Packet:new(arpProtocol, receivedPacket.header.senderIP, arpPort, _G.IP.modems[addr].MAC, receivedPacket.header.senderMAC))
+  local packer = hyperPack:new():deserializeIntoClass(receivedPacket.data)
+  if(packer:popValue() == 1 --[[ ARP Request ]] and packer:popValue() == _G.IP.modems[addr].clientIP) then
+    packer = hyperPack:new()
+    packer:pushValue(2) -- ARP Reply
+    packer:pushValue(_G.IP.modems[addr].MAC)
+    local data = packer:serialize()
+    multiport.send(Packet:new(arpProtocol, receivedPacket.header.senderIP, arpPort, data, receivedPacket.header.senderMAC))
   end
 end
 
@@ -30,9 +36,20 @@ function arp.resolve(IP, skipRegistration)
       arp.trimCache()
     end
   end
-  local packet = Packet:new(arpProtocol, _G.IP.constants.broadcastIP, arpPort, IP, nil, skipRegistration)
+  local packer = hyperPack:new()
+  packer:pushValue(1) -- ARP Request
+  packer:pushValue(IP)
+  local data = packer:serialize()
+  local packet = Packet:new(arpProtocol, _G.IP.constants.broadcastIP, arpPort, data, nil, skipRegistration)
   local message = multiport.requestMessageWithTimeout(packet, true, true, 3, 1,
-    function(message) return message.header.targetPort == arpPort and message.header.protocol == arpProtocol end)
+    function(message)
+      if(message.header.targetPort == arpPort and message.header.protocol == arpProtocol) then
+        packer = hyperPack:new():deserializeIntoClass(message.data)
+        if(packer:popValue() == 2) then -- ARP Reply
+          return packer:popValue()
+        end
+      end
+    end)
   if(message == nil) then
     return nil
   end
@@ -48,7 +65,7 @@ function arp.trimCache()
 end
 
 function arp.updateCache(packet)
-  if(packet.header.senderIP == _G.IP.constants.broadcastIP or packet.header.targetIP == _G.IP.constants.broadcastIP) then
+  if(packet.header.senderIP == _G.IP.constants.broadcastIP) then
     return
   end
   if(packet.header.senderIP == _G.IP.constants.internalIP or packet.header.targetIP == _G.IP.constants.internalIP) then
@@ -79,7 +96,7 @@ function arp.setup()
       if(message.header.targetPort == arpPort and message.header.protocol == arpProtocol) then
         onARPMessage(message)
       end
-    end)
+    end, nil, nil, "ARP Handler")
     event.timer(timeout * 1.5, arp.trimCache, math.huge)
   end
 end

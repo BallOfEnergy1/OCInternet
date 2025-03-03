@@ -10,6 +10,7 @@ function RingBuffer:new(loopRange)
   local o = {}
   setmetatable(o, self)
   self.__index = self
+  o.data = {}
   o.loopRange = loopRange
   o.writeIndex = 0
   o.readIndex = 0

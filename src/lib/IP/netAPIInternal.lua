@@ -2,34 +2,36 @@
 --- @class UnsafeNetAPI
 local internal = {}
 
-function internal.receiveInboundUnsafe(...)
+local Packet = require("IP.classes.PacketClass")
+
+function internal.receiveInboundUnsafe(message, dist)
   for _, handle in pairs(_G.API.registeredCallbacks.receiving) do
     if(type(handle) == "table") then
-      handle:call(...)
+      handle:call(Packet:new():copyFrom(message), dist)
     end
   end
 end
 
-function internal.sendUnicastUnsafe(...)
+function internal.sendUnicastUnsafe(message)
   for _, handle in pairs(_G.API.registeredCallbacks.unicast) do
     if(type(handle) == "table") then
-      handle:call(...)
+      handle:call(Packet:new():copyFrom(message))
     end
   end
 end
 
-function internal.sendMulticastUnsafe(...)
+function internal.sendMulticastUnsafe(message)
   for _, handle in pairs(_G.API.registeredCallbacks.multicast) do
     if(type(handle) == "table") then
-      handle:call(...)
+      handle:call(Packet:new():copyFrom(message))
     end
   end
 end
 
-function internal.sendBroadcastUnsafe(...)
+function internal.sendBroadcastUnsafe(message)
   for _, handle in pairs(_G.API.registeredCallbacks.broadcast) do
     if(type(handle) == "table") then
-      handle:call(...)
+      handle:call(Packet:new():copyFrom(message))
     end
   end
 end

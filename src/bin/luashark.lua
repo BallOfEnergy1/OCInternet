@@ -13,6 +13,8 @@ local buttonLib = require("button")
 local serialization = require("IP.serializationUnsafe")
 local ipUtil = require("IP.IPUtil")
 local api    = require("IP.netAPI")
+local hyperPack = require("hyperpack")
+local Packet = require("IP.classes.PacketClass")
 
 gpu.setResolution(resX, resY)
 
@@ -130,9 +132,40 @@ local function drawEntryScreen()
     gpu.setBackground(backgroundColor)
     index = index + 1
   end
+  gpu.set(3, 15, "Listeners:")
+  gpu.set(4, 16, "Receiving:")
+  index = 0
+  for _, v in pairs(_G.API.registeredCallbacks.receiving) do
+    if(type(v) ~= "number") then
+      gpu.set(5, 17 + index, "- " .. v.name)
+      index = index + 1
+    end
+  end
+  gpu.set(4, 18 + index, "Unicast Sending:")
+  for _, v in pairs(_G.API.registeredCallbacks.unicast) do
+    if(type(v) ~= "number") then
+      gpu.set(5, 19 + index, "- " .. v.name)
+      index = index + 1
+    end
+  end
+  gpu.set(4, 20 + index, "Multicast Sending:")
+  for _, v in pairs(_G.API.registeredCallbacks.multicast) do
+    if(type(v) ~= "number") then
+      gpu.set(5, 21 + index, "- " .. v.name)
+      index = index + 1
+    end
+  end
+  gpu.set(4, 22 + index, "Broadcast Sending:")
+  for _, v in pairs(_G.API.registeredCallbacks.broadcast) do
+    if(type(v) ~= "number") then
+      gpu.set(5, 23 + index, "- " .. v.name)
+      index = index + 1
+    end
+  end
 end
 
 local function inferProtocolFromPacket(packet)
+  local packer = hyperPack:new():deserializeIntoClass(packet.data)
   if(packet.header.protocol == 1) then
     return "ICMP"
   elseif(packet.header.protocol == 2) then
@@ -141,7 +174,8 @@ local function inferProtocolFromPacket(packet)
     --unassigned somehow
     return "Unk."
   elseif(packet.header.protocol == 4) then
-    if(packet.udpProto == 1) then
+    local udpProto = packer:popValue()
+    if(udpProto == 1) then
       return "DHCP"
     end
     return "UDP"
@@ -153,20 +187,26 @@ end
 
 local function inferInfoFromPacket(packet)
   local protocol = inferProtocolFromPacket(packet)
+  local packer = hyperPack:new():deserializeIntoClass(packet.data)
   if(protocol == "ICMP") then
-    if(packet.data.type == 0x1A) then
+    local type = packer:popValue()
+    if(type == 0x1A) then
       return "Echo (ping) request", 0xCCB6FF
-    elseif(packet.data.type == 0x00) then
+    elseif(type == 0x00) then
       return "Echo (ping) reply", 0xCCB6FF
     end
   elseif(protocol == "ARP") then
-    if(packet.header.targetIP == ipUtil.fromUserFormat(_G.IP.constants.broadcastIP)) then
-      return "Who has " .. ipUtil.toUserFormat(packet.data) .. "? Tell " .. ipUtil.toUserFormat(packet.header.senderIP), 0xFFFFC0
+    local type = packer:popValue()
+    local data = packer:popValue()
+    if(type == 1) then
+      return "Who has " .. ipUtil.toUserFormat(data) .. "? Tell " .. ipUtil.toUserFormat(packet.header.senderIP), 0xFFFFC0
     else
-      return ipUtil.toUserFormat(packet.header.senderIP) .. " is at " .. packet.data, 0xFFFFC0
+      return ipUtil.toUserFormat(packet.header.senderIP) .. " is at " .. data, 0xFFFFC0
     end
   elseif(protocol == "UDP") then
-    return packet.header.senderPort .. " → " .. packet.header.targetPort .. " " .. "Len=" .. (packet.udpLength or "Unk."), 0xCCFFFF
+    local udpProto = packer:popValue()
+    local udpLength = packer:popValue()
+    return packet.header.senderPort .. " → " .. packet.header.targetPort .. " " .. "Len=" .. (udpLength or "Unk."), 0xCCFFFF
   elseif(protocol == "DHCP") then
     if(packet.data == 0x10) then
       return "DHCP Release", 0xCCFFFF
@@ -182,6 +222,7 @@ local function inferInfoFromPacket(packet)
   elseif(protocol == "Unk.") then
     return "", 0x992400
   end
+  return "Unk; protocol: " .. tostring(protocol), 0x992400
 end
 
 local function drawInterfaceScreen()
@@ -202,7 +243,7 @@ local function drawInterfaceScreen()
             makeSize(ipUtil.toUserFormat(v.packet.header.senderIP) or "nil", 19) .. "  " ..
             makeSize(ipUtil.toUserFormat(v.packet.header.targetIP) or "nil", 19) .. "  " ..
             makeSize(inferProtocolFromPacket(v.packet), 8) .. "  " ..
-            makeSize(#serialization.serialize(v.packet), 6) .. "   " .. -- TODO: Change to hyperpack!
+            makeSize(v.size, 6) .. "   " .. -- TODO: Change to hyperpack!
             text
         )
       else
@@ -212,7 +253,7 @@ local function drawInterfaceScreen()
             makeSize(ipUtil.toUserFormat(v.packet.header.senderIP) or "nil", 19) .. "  " ..
             makeSize(ipUtil.toUserFormat(v.packet.header.targetIP) or "nil", 19) .. "  " ..
             makeSize(inferProtocolFromPacket(v.packet), 8) .. "  " ..
-            makeSize(#serialization.serialize(v.packet), 6) -- TODO: Change to hyperpack!
+            makeSize(v.size, 6)
         )
       end
     end
@@ -223,7 +264,6 @@ end
 local function writeToScreen()
   gpu.bitblt()
 end
-
 
 local function updateNetworkIndicator(receiverMAC, senderMAC)
   if(status == 0) then -- In entry screen.
@@ -248,24 +288,23 @@ local function updateNetworkIndicator(receiverMAC, senderMAC)
 end
 
 local function onNetworkEvent(message, dist)
-  updateNetworkIndicator(message.header.receiverMAC, message.header.senderMAC)
-  if(status == 1 and selectedInterface == message.header.receiverMAC and capturing) then
-    packetsOnInterface[#packetsOnInterface + 1] = {dist = dist, packet = message, time = require("computer").uptime() - interfaceStartTime}
+  updateNetworkIndicator(message.header.targetMAC, message.header.senderMAC)
+  if(status == 1 and (selectedInterface == message.header.targetMAC or message.header.targetMAC == _G.IP.constants.broadcastMAC) and capturing) then -- TODO: Change to hyperpack!
+    table.insert(packetsOnInterface, {dist = dist, packet = message, size = #serialization.serialize(message), time = require("computer").uptime() - interfaceStartTime})
   end
 end
 
 local function onNetworkSent(message)
-  updateNetworkIndicator(message.header.receiverMAC, message.header.senderMAC)
-  if(status == 1 and selectedInterface == message.header.senderMAC and capturing) then
-    message = serialization.unserialize(message)
-    packetsOnInterface[#packetsOnInterface + 1] = {dist = 0, packet = message, time = require("computer").uptime() - interfaceStartTime}
+  updateNetworkIndicator(message.header.targetMAC, message.header.senderMAC)
+  if(status == 1 and (selectedInterface == message.header.senderMAC or message.header.senderMAC == _G.IP.constants.broadcastMAC) and capturing) then -- TODO: Change to hyperpack!
+    table.insert(packetsOnInterface, {dist = 0, packet = message, size = #serialization.serialize(message), time = require("computer").uptime() - interfaceStartTime})
   end
 end
 
 local function onNetworkBroadcast(message)
-  updateNetworkIndicator(message.header.receiverMAC, message.header.senderMAC)
-  if(status == 1 and selectedInterface == message.header.senderMAC and capturing) then
-    packetsOnInterface[#packetsOnInterface + 1] = {dist = 0, packet = message, time = require("computer").uptime() - interfaceStartTime}
+  updateNetworkIndicator(message.header.targetMAC, message.header.senderMAC)
+  if(status == 1 and (selectedInterface == message.header.senderMAC or message.header.senderMAC == _G.IP.constants.broadcastMAC) and capturing) then -- TODO: Change to hyperpack!
+    table.insert(packetsOnInterface, {dist = 0, packet = message, size = #serialization.serialize(message), time = require("computer").uptime() - interfaceStartTime})
   end
 end
 
@@ -277,9 +316,9 @@ writeTopBar()
 drawEntryScreen()
 writeToScreen()
 
-local networkEvent = api.registerReceivingCallback(onNetworkEvent)
-local networkSent = api.registerUnicastSendingCallback(onNetworkSent)
-local networkBroadcast = api.registerBroadcastSendingCallback(onNetworkBroadcast)
+local networkEvent = api.registerReceivingCallback(onNetworkEvent, nil, nil, "LuaShark")
+local networkSent = api.registerUnicastSendingCallback(onNetworkSent, nil, nil, "LuaShark")
+local networkBroadcast = api.registerBroadcastSendingCallback(onNetworkBroadcast, nil, nil, "LuaShark")
 
 local running = true
 

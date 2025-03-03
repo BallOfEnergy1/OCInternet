@@ -6,42 +6,27 @@ local RR = {
   data = nil
 }
 
-function RR:new(_, protocol, targetIP, targetPort, data, MAC, noReg)
-  if(not noReg) then
-    require("IP.protocols.DHCP").registerIfNeeded()
-  end
+local hyperPack = require("hyperpack")
+
+function RR:new(name, type, ttl, data)
   local o = {}
   setmetatable(o, self)
   self.__index = self
-  o.protocol = protocol
-  local dynPort = math.floor(math.random(49152, 65535)) -- Random dynamic port.
-  o.senderPort = dynPort
-  o.targetPort = targetPort
-  local broadcast = require("IP.IPUtil").fromUserFormat("FFFF:FFFF:FFFF:FFFF")
-  if(targetIP == broadcast) then
-    o.targetMAC = broadcast
-  else
-    o.targetMAC = MAC or require("IP.protocols.ARP").resolve(targetIP)
-  end
-  local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
-  o.senderMAC  = _G.IP.modems[addr].MAC
-  o.senderIP   = _G.IP.modems[addr].clientIP
-  o.targetIP   = targetIP
-  o.data       = data
+  o.name = name
+  o.type = type
+  o.ttl = ttl
+  o.data = data
   return o
 end
 
-function RR:build()
-  return {
-    protocol = self.protocol,
-    senderPort = self.senderPort,
-    targetPort = self.targetPort,
-    targetMAC = self.targetMAC,
-    senderMAC = self.senderMAC,
-    senderIP = self.senderIP,
-    targetIP = self.targetIP,
-    data = self.data
-  }
+function RR:serialize()
+  assert(type(self.data) ~= "table", "RR data expected string, got " .. type(self.data) .. ".")
+  local packer = hyperPack:new()
+  packer:pushValue(self.name)
+  packer:pushValue(self.type)
+  packer:pushValue(self.ttl)
+  packer:pushValue(self.data)
+  local fullPacket = packer:serialize()
+  return fullPacket
 end
-
 return RR

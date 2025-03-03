@@ -10,12 +10,12 @@ function multiport.send(packet, skipRegister)
     require("IP.protocols.DHCP").registerIfNeeded()
   end
   netAPIInternal.sendUnicastUnsafe(packet)
-  subnet.send(packet.targetMAC, multiportPort, packet)
+  subnet.send(packet.header.targetMAC, multiportPort, packet)
 end
 
 function multiport.broadcast(packet, skipRegister)
-  packet.targetMAC = _G.IP.constants.broadcastMAC
-  packet.targetIP = _G.IP.constants.broadcastIP
+  packet.header.targetMAC = _G.IP.constants.broadcastMAC
+  packet.header.targetIP = _G.IP.constants.broadcastIP
   if(not skipRegister) then
     require("IP.protocols.DHCP").registerIfNeeded()
   end
@@ -40,9 +40,8 @@ end
 
 function multiport.pullMessageWithAttempts(timeout, attempts, eventCondition)
   local tries = 1
-  ::start::
   local result
-  while result ~= nil and tries <= attempts do
+  while result == nil and tries <= attempts do
     result = multiport.pullMessageWithTimeout(timeout, eventCondition)
     if(not result) then
       tries = tries + 1
@@ -57,7 +56,7 @@ end
 function multiport.requestMessageWithTimeout(packet, skipRegister, broadcast, timeout, attempts, eventCondition)
   local tries = 1
   local result
-  while result ~= nil and tries <= attempts do
+  while result == nil and tries <= attempts do
     if(broadcast) then
       multiport.broadcast(packet, skipRegister)
     else

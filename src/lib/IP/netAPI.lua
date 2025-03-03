@@ -14,11 +14,11 @@ local function getAmountOutboundHandles()
     _G.API.registeredCallbacks.broadcast.count
 end
 
-function api.registerReceivingCallback(callback, timeout, errorHandler)
+function api.registerReceivingCallback(callback, timeout, errorHandler, name)
   if(getAmountInboundHandles() >= _G.API.maxInboundHandles) then
-    errorHandler("Too many open callbacks when registering on side 'RECEIVING'.")
+    (errorHandler or function(error) _G.IP.logger.write(debug.traceback(error)) end)("Too many open callbacks when registering on side 'RECEIVING'.")
   end
-  local callbackObject = Callback:new(callback, errorHandler)
+  local callbackObject = Callback:new(callback, errorHandler, name)
   if(timeout ~= nil) then
     require("event").timer(timeout, function() callbackObject.errorHandler("Timed out."); api.unregisterCallback(callbackObject) end)
   end
@@ -28,11 +28,11 @@ function api.registerReceivingCallback(callback, timeout, errorHandler)
   return callbackObject
 end
 
-function api.registerUnicastSendingCallback(callback, timeout, errorHandler)
+function api.registerUnicastSendingCallback(callback, timeout, errorHandler, name)
   if(getAmountOutboundHandles() >= _G.API.maxOutboundHandles) then
-    errorHandler("Too many open callbacks when registering on side 'UNI_SENDING'.")
+    (errorHandler or function(error) _G.IP.logger.write(debug.traceback(error)) end)("Too many open callbacks when registering on side 'UNI_SENDING'.")
   end
-  local callbackObject = Callback:new(callback, errorHandler)
+  local callbackObject = Callback:new(callback, errorHandler, name)
   if(timeout ~= nil) then
     require("event").timer(timeout, function() callbackObject.errorHandler("Timed out."); api.unregisterCallback(callbackObject) end)
   end
@@ -42,11 +42,11 @@ function api.registerUnicastSendingCallback(callback, timeout, errorHandler)
   return callbackObject
 end
 
-function api.registerMulticastSendingCallback(callback, timeout, errorHandler)
+function api.registerMulticastSendingCallback(callback, timeout, errorHandler, name)
   if(getAmountOutboundHandles() >= _G.API.maxOutboundHandles) then
-    errorHandler("Too many open callbacks when registering on side 'MULTI_SENDING'.")
+    (errorHandler or function(error) _G.IP.logger.write(debug.traceback(error)) end)("Too many open callbacks when registering on side 'MULTI_SENDING'.")
   end
-  local callbackObject = Callback:new(callback, errorHandler)
+  local callbackObject = Callback:new(callback, errorHandler, name)
   if(timeout ~= nil) then
     require("event").timer(timeout, function() callbackObject.errorHandler("Timed out."); api.unregisterCallback(callbackObject) end)
   end
@@ -56,11 +56,11 @@ function api.registerMulticastSendingCallback(callback, timeout, errorHandler)
   return callbackObject
 end
 
-function api.registerBroadcastSendingCallback(callback, timeout, errorHandler)
+function api.registerBroadcastSendingCallback(callback, timeout, errorHandler, name)
   if(getAmountOutboundHandles() >= _G.API.maxOutboundHandles) then
-    errorHandler("Too many open callbacks when registering on side 'BROAD_SENDING'.")
+    (errorHandler or function(error) _G.IP.logger.write(debug.traceback(error)) end)("Too many open callbacks when registering on side 'BROAD_SENDING'.")
   end
-  local callbackObject = Callback:new(callback, errorHandler)
+  local callbackObject = Callback:new(callback, errorHandler, name)
   if(timeout ~= nil) then
     require("event").timer(timeout, function() callbackObject.errorHandler("Timed out."); api.unregisterCallback(callbackObject) end)
   end
@@ -71,10 +71,19 @@ function api.registerBroadcastSendingCallback(callback, timeout, errorHandler)
 end
 
 function api.unregisterCallback(callback) -- IDs are universally unique so we can do this without incident.
-  _G.API.registeredCallbacks.receiving[callback.id] = nil
-  _G.API.registeredCallbacks.unicast[callback.id] = nil
-  _G.API.registeredCallbacks.multicast[callback.id] = nil
-  _G.API.registeredCallbacks.broadcast[callback.id] = nil
+  if(_G.API.registeredCallbacks.receiving[callback.id] ~= nil) then
+    _G.API.registeredCallbacks.receiving[callback.id] = nil
+    _G.API.registeredCallbacks.receiving.count = _G.API.registeredCallbacks.receiving.count - 1
+  elseif(_G.API.registeredCallbacks.unicast[callback.id] ~= nil) then
+    _G.API.registeredCallbacks.unicast[callback.id] = nil
+    _G.API.registeredCallbacks.unicast.count = _G.API.registeredCallbacks.unicast.count - 1
+  elseif(_G.API.registeredCallbacks.multicast[callback.id] ~= nil) then
+    _G.API.registeredCallbacks.multicast[callback.id] = nil
+    _G.API.registeredCallbacks.multicast.count = _G.API.registeredCallbacks.multicast.count - 1
+  elseif(_G.API.registeredCallbacks.broadcast[callback.id] ~= nil) then
+    _G.API.registeredCallbacks.broadcast[callback.id] = nil
+    _G.API.registeredCallbacks.broadcast.count = _G.API.registeredCallbacks.broadcast.count - 1
+  end
 end
 
 function api.setup(config)

@@ -3,7 +3,6 @@
 
 
 
-local function resolveFromDNS()
-
+local function resolveFromDNS(domain)
 
 end

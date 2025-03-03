@@ -101,12 +101,8 @@ _G.ROUTE.isInitialized = true
 
 print("Checking presence of default gateway...")
 local addr = _G.ROUTE.internalModem.MAC
-local response, code = ARP.resolve(_G.IP.modems[addr].defaultGateway)
+local response = ARP.resolve(_G.IP.modems[addr].defaultGateway)
 if(response) then
-  if(code == -1) then
-    print("Operation canceled.")
-    return
-  end
   print("Failed to start router software, default gateway already present.")
   return
 end
@@ -131,4 +127,4 @@ api.registerReceivingCallback(function(message) -- Check for broadcasts and filt
   ) then
     -- TODO: Implement RIPv2 for routing.
   end
-end)
+end, nil, nil, "Routing Handler")

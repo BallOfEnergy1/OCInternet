@@ -9,7 +9,7 @@ local Packet = {
     senderIP = nil,
     targetIP = nil,
     seq = 1,
-    seqEnd = true,
+    seqEnd = true
   },
   data = nil
 }
@@ -22,8 +22,18 @@ function Packet:new(protocol, targetIP, targetPort, data, MAC, noReg)
   self.__index = self
   if(protocol == nil) then
     -- Assume overload
-    o.header = {}
-    o.data = nil
+    o.header = {
+      protocol = 0,
+      senderPort = 0,
+      targetPort = 0,
+      targetMAC = "",
+      senderMAC = "",
+      senderIP = 0,
+      targetIP = 0,
+      seq = 1,
+      seqEnd = true
+    }
+    o.data = ""
     return o
   end
   if(not noReg) then
@@ -70,7 +80,9 @@ function Packet:serializeAndFragment(MTU)
   packer:pushValue(self.header.targetIP)
   packer:pushValue(self.header.seq)
   packer:pushValue(self.header.seqEnd)
+  packer:pushValue("c" .. #(self.data or ""))
   local header = packer:serialize()
+  packer:removeLastEntry()
   packer:pushValue(self.data or "")
   local fullPacket = packer:serialize()
   
