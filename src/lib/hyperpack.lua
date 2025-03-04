@@ -1,12 +1,15 @@
---- @class PackedString
-local PackedString = {
+--- @class Hyperpack
+--- Hyperpack library, used for byte-packing multiple data values (or a table) into a string.
+local Hyperpack = {
   format = "",
   values = {},
   readOnly = nil,
   readIndex = nil
 }
 
-function PackedString:new()
+--- Creates a new hyperpack class instance.
+--- @return Hyperpack Instance.
+function Hyperpack:new()
   local o = {}
   setmetatable(o, self)
   self.__index = self
@@ -50,7 +53,12 @@ local function getFormatString(value)
   end
 end
 
-function PackedString:pushValue(value)
+--- Pushes a value to the hyperpack stack. Automatically creates format string.
+---
+--- Function will error if a nil value if given or if the target structure is read-only.
+--- @param value any Value to pack.
+--- @return nil
+function Hyperpack:pushValue(value)
   assert(self.readOnly == false, debug.traceback("Structure is read-only."))
   assert(value ~= nil, debug.traceback("Packed value cannot be nil."))
   if(type(value) == "table") then
@@ -71,7 +79,13 @@ function PackedString:pushValue(value)
   end
 end
 
-function PackedString:removeLastEntry(amount) -- understand that i dont like you
+--- Removes `amount` of entries from the top of the hyperpack stack.
+---
+--- If `amount` is `nil`, this function will remove the top item from the stack.
+--- @param amount number Amount to remove.
+--- @return Hyperpack Self instance.
+--- @overload fun():Hyperpack
+function Hyperpack:removeLastEntry(amount) -- understand that i dont like you
   if(amount) then
     for _ = 1, amount do
       self:removeLastEntry()
@@ -90,9 +104,13 @@ function PackedString:removeLastEntry(amount) -- understand that i dont like you
   self.format = self.format:sub(1, (-#format) - 1)
   self.values[#self.values] = nil
   return self
-  end
+end
 
-function PackedString:serialize()
+--- Serializes Hyperpack class into a string.
+---
+--- Function can error if serialization fails.
+--- @return string Packed Hyperpack class.
+function Hyperpack:serialize()
   local success, result = pcall(function() return self.format .. string.char(0x00) .. string.pack(self.format, table.unpack(self.values)) end)
   if(not success) then
     local errorString = "Hyperpack failed with the following format string: '" .. self.format .. "'.\nHyperpack table contents:\n"
@@ -105,7 +123,13 @@ function PackedString:serialize()
   return result
 end
 
-function PackedString:deserializeIntoClass(packedString)
+-- TODO: add validation bruh...
+--- Deserializes a string into a Hyperpack instance. No validation is done during this step.
+---
+--- Function can error if deserialization fails.
+--- @param packedString string Packed Hyperpack string.
+--- @return Hyperpack Read-only Hyperpack class.
+function Hyperpack:deserializeIntoClass(packedString)
   local iterator = string.gmatch(packedString, "[^" .. string.char(0x00) .. "]+")
   self.format = iterator()
   local stringToUnpack = packedString:sub(#self.format + 2)
@@ -136,7 +160,11 @@ function PackedString:deserializeIntoClass(packedString)
   return self
 end
 
-function PackedString:popValue()
+--- Pops a value off the top of the Hyperpack stack.
+---
+--- Can error in the case of a stack underflow.
+--- @return any
+function Hyperpack:popValue()
   local value = self.values[self.readIndex]
   if(value == nil) then
     error("Stack underflow; attempted to read nil entry.")
@@ -146,7 +174,11 @@ function PackedString:popValue()
   return value
 end
 
-function PackedString:copyFrom(otherClass)
+--- Copies a given Hyperpack class to this instance.
+---
+--- @param otherClass Hyperpack Hyperpack class to copy from.
+--- @return Hyperpack Self instance with values from `otherClass`.
+function Hyperpack:copyFrom(otherClass)
   self.format = otherClass.format
   for i, v in pairs(otherClass.values) do
     self.values[i] = v
@@ -156,4 +188,4 @@ function PackedString:copyFrom(otherClass)
   return self
 end
 
-return PackedString
+return Hyperpack

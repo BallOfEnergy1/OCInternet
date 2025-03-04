@@ -1,4 +1,5 @@
----@class Callback
+--- @class Callback
+--- Callback class, used for callback registration in the NetAPI class.
 local Callback = {
   id = "",
   name = "",
@@ -7,6 +8,14 @@ local Callback = {
   errorHandler = function(error) _G.IP.logger.write(debug.traceback(error)) end
 }
 
+--- Creates a new Callback class instance.
+---
+--- `errorHandler` and `name` are optional fields.
+--- @param callback function Function to call when callback is called.
+--- @param errorHandler function Error handler to use when callback fails/errors.
+--- @param name string Internal name to give callback.
+--- @return Callback New Callback instance.
+--- @overload fun(callback:function):Callback
 function Callback:new(callback, errorHandler, name)
   local o = {}
   setmetatable(o, self)
@@ -23,6 +32,10 @@ function Callback:new(callback, errorHandler, name)
   return o
 end
 
+--- Calls the callback function with error-catching.
+---
+--- @param ... any Parameters to call callback with.
+--- @return any Value returned from callback or error handler function.
 function Callback:call(...)
   local success, result = pcall(self.callback, ...)
   if(not success) then

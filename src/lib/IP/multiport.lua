@@ -79,6 +79,9 @@ function multiport.requestMessageWithTimeout(packet, broadcast, timeout, attempt
 end
 
 --- Internal function, not for outside use.
+--- @param targetPort number Hardware target port.
+--- @param dist number Packet sent distance.
+--- @param message Packet Received packet.
 --- @private
 function multiport.process(targetPort, dist, message)
   if(targetPort == multiportPort) then
@@ -87,6 +90,7 @@ function multiport.process(targetPort, dist, message)
 end
 
 --- For use when setting up a modem, only for use during stack initialization or when a new modem is added.
+--- @param modem table Modem proxy table.
 --- @private
 function multiport.setupModem(modem)
   modem.open(multiportPort)
