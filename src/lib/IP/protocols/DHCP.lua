@@ -11,9 +11,9 @@ local dhcpClientPort = 68
 local dhcpUDPProtocol = 1
 
 function dhcp.release()
+  udp.broadcast(dhcpServerPort, 0x10, dhcpUDPProtocol)
   local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
   _G.DHCP.DHCPRegisteredModems[addr] = false
-  udp.broadcast(dhcpServerPort, 0x10, dhcpUDPProtocol, true)
 end
 
 function dhcp.setup(config)
@@ -22,6 +22,7 @@ function dhcp.setup(config)
     do
       _G.DHCP.DHCPRegisteredModems = {}
       _G.DHCP.static         = config.DHCP.static
+      _G.DHCP.skipRegister   = false
     end
     _G.DHCP.callback = udp.UDPListen(dhcpClientPort, function(receivedPacket)
       if(receivedPacket.udpProto == dhcpUDPProtocol and receivedPacket.data == 0x11) then
@@ -39,11 +40,12 @@ function dhcp.registerIfNeeded()
   end
   local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
   if(not _G.DHCP.DHCPRegisteredModems[addr]) then
+    _G.DHCP.skipRegister = true
     _G.IP.modems[addr].clientIP = 0
     local attempts = 2
     local message
     for _ = 1, attempts do
-      udp.broadcast(dhcpServerPort, nil, dhcpUDPProtocol, true)
+      udp.broadcast(dhcpServerPort, nil, dhcpUDPProtocol)
       message = udp.pullUDP(dhcpClientPort, 2)
       if(message and message.udpProto == dhcpUDPProtocol) then
         break
@@ -63,6 +65,7 @@ function dhcp.registerIfNeeded()
     _G.IP.logger.write("IP: " .. util.toUserFormat(_G.IP.modems[addr].clientIP))
     _G.IP.logger.write("Subnet Mask: " .. util.toUserFormat(_G.IP.modems[addr].subnetMask))
     _G.IP.logger.write("Default Gateway: " .. util.toUserFormat(_G.IP.modems[addr].defaultGateway))
+    _G.DHCP.skipRegister = false
   end
 end
 

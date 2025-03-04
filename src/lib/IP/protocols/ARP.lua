@@ -28,7 +28,7 @@ local function getTimeout(time)
   return time + require("computer").uptime()
 end
 
-function arp.resolve(IP, skipRegistration)
+function arp.resolve(IP)
   for MAC, IPtable in pairs(_G.ARP.cachedMappings) do
     if(IPtable.IP == IP and IPtable.timeout > require("computer").uptime()) then
       return MAC
@@ -40,8 +40,8 @@ function arp.resolve(IP, skipRegistration)
   packer:pushValue(1) -- ARP Request
   packer:pushValue(IP)
   local data = packer:serialize()
-  local packet = Packet:new(arpProtocol, _G.IP.constants.broadcastIP, arpPort, data, nil, skipRegistration)
-  local message = multiport.requestMessageWithTimeout(packet, true, true, 3, 1,
+  local packet = Packet:new(arpProtocol, _G.IP.constants.broadcastIP, arpPort, data)
+  local message = multiport.requestMessageWithTimeout(packet, true, 3, 1,
     function(message)
       if(message.header.targetPort == arpPort and message.header.protocol == arpProtocol) then
         packer = hyperPack:new():deserializeIntoClass(message.data)

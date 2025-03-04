@@ -76,7 +76,7 @@ local function writeRRToDisk(RR)
     if(not RRFile:sub(1, 3) == "Un") then
       _G.IP.logger.write("Incompatible DNS RR file found, creating emergency RR file...")
       _G.IP.logger.write("Reason: Attempted to read a compressed DNS entry with compression disabled.")
-      _G.DNS.recordLocation = _G.DNS.recordLocation .. "/emergency.RR"
+      _G.DNS.recordLocation = fs.path(_G.DNS.recordLocation) .. "/emergency.RR"
       local handle = io.open(_G.DNS.recordLocation, "w")
       handle:write("Uncompressed DNS Records; Emergency file. These files are made when the original DNS file cannot be recovered, see logs for more details.")
       handle:write(serializedData)
@@ -86,7 +86,7 @@ local function writeRRToDisk(RR)
     end
   end
   do
-    local handle = io.open(_G.DNS.recordLocation .. "/primary.RR", "w")
+    local handle = io.open(_G.DNS.recordLocation, "w")
     handle:write(serializedData)
     handle:close()
   end
@@ -111,7 +111,7 @@ function dnsServer.setup(config)
   DNS.setup(config)
   if(not _G.DNS or not _G.DNS.isInitialized) then
     _G.DNS = {}
-    _G.DNS.recordLocation = config.DNSServer.RRLocation
+    _G.DNS.recordLocation = config.DNSServer.RRLocation .. "/primary.RR"
     _G.DNS.recordCompression = config.DNSServer.compression
     _G.DNS.recordCompressionMode = config.DNSServer.compressionMode
     _G.DNS.serverCallback = udp.UDPListen(dnsPort, function(packet)

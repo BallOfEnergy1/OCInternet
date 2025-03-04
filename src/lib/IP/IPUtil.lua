@@ -1,3 +1,5 @@
+
+--- Utility class for IPs and subnets.
 local util = {}
 
 local logutil = require("logutil")
@@ -13,6 +15,10 @@ function util.toHex(dec)
   return output
 end
 
+--- Converts a decimal IP format into a string-readable representation.
+---
+--- @param dec number Decimal representation of IP.
+--- @return string "Fancy" representation of IP. Returns "nil" if `nil` or any non-number type was provided.
 function util.toUserFormat(dec)
   if(dec == nil or type(dec) ~= "number") then
     return "nil"
@@ -27,6 +33,11 @@ function util.toUserFormat(dec)
   return string.upper(endingString)
 end
 
+--- Converts a string IP into a decimal representation. This includes fancy formats/shorthands including `123::1` for `0123:0000:0000:0001`.
+---
+--- Returns `nil` and an error message if an incorrect input was given.
+--- @param IP string String "fancy" representation of an IP.
+--- @return number|nil Decimal representation of `IP`.
 function util.fromUserFormat(IP)
   local formatted
   if(string.find(IP, "::")) then
@@ -66,27 +77,41 @@ function util.fromUserFormat(IP)
   return parsedIP
 end
 
--- Takes in dec representations!
+--- Creates an IP using a subnet identifier and a device identifier.
+--- @param subnet number Subnet identifier.
+--- @param ID number Device identifier.
+--- @return number Combined subnet and device identifiers to form a proper IP.
 function util.createIP(subnet, ID)
   return subnet | ID
 end
 
+--- Gets the subnet identifier from a given IP.
+---
+--- Throws an error if the given IP is non-numerical.
+--- @param IP number IP to get the subnet identifier from.
+--- @return number Subnet identifier in decimal form.
 function util.getSubnet(IP)
   if(type(IP) ~= "number") then
-    error(debug.traceback("IP not numerical (" .. tostring(IP) .. ")."))
+    error("IP not numerical (" .. tostring(IP) .. ").")
   end
   local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
   return IP & _G.IP.modems[addr].subnetMask
 end
 
+--- Gets the device identifier from a given IP.
+---
+--- Throws an error if the given IP is non-numerical.
+--- @param IP number IP to get the device identifier from.
+--- @return number Device identifier in decimal form.
 function util.getID(IP)
   if(type(IP) ~= "number") then
-    error(debug.traceback("IP not numerical (" .. tostring(IP) .. ")."))
+    error("IP not numerical (" .. tostring(IP) .. ").")
   end
   local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
   return IP & (~_G.IP.modems[addr].subnetMask)
 end
 
+--- @class Modem
 local Modem = {
   clientIP = 0,
   subnetMask = 0,
@@ -107,19 +132,25 @@ function Modem:new(clientIP, subnetMask, defaultGateway, MAC, modem)
   return o
 end
 
+--- Standard setup function, for use during initialization.
+--- @private
 function util.setup(config)
   if(not _G.IP or not _G.IP.isInitialized) then
     local multiport = require("IP.multiport")
     local packetFrag = require("IP.packetFrag")
     require("filesystem").makeDirectory("/var/ip") -- TODO get rid of this bs
+    --- Global table used by the IP utility library, and therefore the entire network stack.
     _G.IP = {}
     do
+      --- Global constants used by the network stack; it is not suggested to edit these.
       _G.IP.constants = {
         broadcastMAC = "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF",    -- Broadcast MAC
         broadcastIP = util.fromUserFormat("FFFF:FFFF:FFFF:FFFF"), -- Broadcast IP
         internalIP = util.fromUserFormat("0000:0000:0000:0000")   -- Used internally for protocols lower than IPv5 or DHCP (IPs are required).
       }
+      --- Global logger for the network stack.
       _G.IP.logger = logutil.initLogger("IPv5", "/var/ip/ip.log")
+      --- Table of all registered modems on the network stack.
       _G.IP.modems = {}
       local list = component.list("modem")
       for addr in list do
@@ -133,11 +164,13 @@ function util.setup(config)
         multiport.setupModem(modem.modem)
         _G.IP.modems[addr] = modem
         if(_G.IP.primaryModem == nil) then
+          --- Primary modem for the network stack (sending).
           _G.IP.primaryModem = modem
         end
       end
     end
     packetFrag.setup(config)
+    --- Initialization token.
     _G.IP.isInitialized = true
   end
 end

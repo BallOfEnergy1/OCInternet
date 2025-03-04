@@ -58,7 +58,7 @@ local function onDHCPMessage(receivedPacket)
   packer:pushValue(_G.DHCP.providedSubnetMask)
   packer:pushValue(_G.IP.modems[addr].defaultGateway)
   local data = packer:serialize()
-  udp.send(0, dhcpClientPort, data, dhcpUDPProtocol, false, receivedPacket.header.senderMAC)
+  udp.send(0, dhcpClientPort, data, dhcpUDPProtocol, receivedPacket.header.senderMAC)
   _G.DHCP.allRegisteredMACs[receivedPacket.header.senderMAC] = {ip = IP, index = _G.DHCP.IPIndex}
 end
 

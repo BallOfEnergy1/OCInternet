@@ -43,9 +43,9 @@ local Session = {
   listenerCallback = {}
 }
 
-local function send(IP, port, payload, skipRegistration)
+local function send(IP, port, payload)
   local packet = Packet:new(tcpProtocol, IP, port, payload)
-  multiport.send(packet, skipRegistration)
+  multiport.send(packet)
 end
 
 function Session:new(IP, port, seq, ack)
@@ -121,7 +121,7 @@ function Session:acceptConnection(SYNPacket)
     self.targetIP,
     self.targetPort,
     {tcp = TCPHeader:new(0x05, self.ackNum, self.seqNum):build(), data = nil} -- SYN-ACK
-  ), false, false, 5, 5, function(message) return message.header.targetPort == self.targetPort and message.header.protocol == tcpProtocol end)
+  ), false, 5, 5, function(message) return message.header.targetPort == self.targetPort and message.header.protocol == tcpProtocol end)
   
   if(message == nil) then
     self:reset()
@@ -161,7 +161,7 @@ function Session:acceptFinalization()
   end
   
   self.status = "LAST-ACK"
-  local message = multiport.pullMessageWithAttempts(5, 5, function(message) return message.header.targetPort == self.targetPort and message.header.protocol == tcpProtocol end)
+  local message = multiport.pullMessageWithTimeout(5 * 5 --[[ 5 sec timeout, 5 attempts ]], function(message) return message.header.targetPort == self.targetPort and message.header.protocol == tcpProtocol end)
   if(message == nil) then
     self:reset()
     return false, "Connection closed; timed out."
@@ -185,7 +185,7 @@ function Session:acceptData(DATAPacket)
   end
   self.buffer:writeData(DATAPacket.data.data)
   self.ackNum = self.ackNum + #serialization.serialize(DATAPacket.data.data)
-  send(self.targetIP, self.targetPort, {tcp = TCPHeader:new(0x1, self.ackNum, self.seqNum):build(), data = nil}, false) --  Send ACK
+  send(self.targetIP, self.targetPort, {tcp = TCPHeader:new(0x1, self.ackNum, self.seqNum):build(), data = nil}) --  Send ACK
 end
 
 function Session:start()
@@ -203,7 +203,7 @@ function Session:start()
     self.targetIP,
     self.targetPort,
     {tcp = TCPHeader:new(0x04, 0, self.seqNum):build(), data = nil} -- SYN
-  ), false, false, 5, 5, function(message) return message.header.targetPort == self.targetPort and message.header.protocol == tcpProtocol end)
+  ), false, 5, 5, function(message) return message.header.targetPort == self.targetPort and message.header.protocol == tcpProtocol end)
   
   if(message == nil) then
     self:reset()
@@ -218,7 +218,7 @@ function Session:start()
       self.ackNum = data.tcp.seqNum
       self.status = "ESTABLISHED"
       self.ackNum = self.ackNum + 1
-      send(self.targetIP, self.targetPort, {tcp = TCPHeader:new(0x1, self.ackNum, self.seqNum):build(), data = nil}, false) --  Send ACK
+      send(self.targetIP, self.targetPort, {tcp = TCPHeader:new(0x1, self.ackNum, self.seqNum):build(), data = nil}) --  Send ACK
       self.ackNum = self.ackNum + 1
       return true
     end
@@ -245,7 +245,7 @@ function Session:stop()
     self.targetIP,
     self.targetPort,
     {tcp = TCPHeader:new(0x08, self.ackNum, self.seqNum):build(), data = nil} -- FIN
-  ), false, false, 5, 5, function(message) return message.header.targetPort == self.targetPort and message.header.protocol == tcpProtocol end)
+  ), false, 5, 5, function(message) return message.header.targetPort == self.targetPort and message.header.protocol == tcpProtocol end)
   
   if(message == nil) then
     self:reset()
@@ -259,7 +259,7 @@ function Session:stop()
   end
   self.seqNum = self.seqNum + 1
   self.status = "FIN-WAIT-2"
-  message = multiport.pullMessageWithAttempts(5, 5, function(receivedMessage) return receivedMessage.header.targetPort == self.targetPort and receivedMessage.header.protocol == tcpProtocol end)
+  message = multiport.pullMessageWithTimeout(5 * 5 --[[ 5 sec timeout, 5 attempts ]], function(receivedMessage) return receivedMessage.header.targetPort == self.targetPort and receivedMessage.header.protocol == tcpProtocol end)
 
   if(message == nil) then
     self:reset()
@@ -271,7 +271,7 @@ function Session:stop()
     self:reset()
     return
   end
-  send(self.targetIP, self.targetPort, {tcp = TCPHeader:new(0x1, self.ackNum, self.seqNum):build(), data = nil}, false) --  Send ACK
+  send(self.targetIP, self.targetPort, {tcp = TCPHeader:new(0x1, self.ackNum, self.seqNum):build(), data = nil}) --  Send ACK
   self.ackNum = self.ackNum + 1
   self.status = "TIME-WAIT"
   event.timer(10, function()
@@ -293,7 +293,7 @@ function Session:send(payload)
     self.targetIP,
     self.targetPort,
     {tcp = TCPHeader:new(0x00, self.ackNum, self.seqNum):build(), data = payload} -- DATA
-  ), false, false, 5, 5, function(message) return message.header.targetPort == self.targetPort and message.header.protocol == tcpProtocol end)
+  ), false, 5, 5, function(message) return message.header.targetPort == self.targetPort and message.header.protocol == tcpProtocol end)
   
   if(message == nil) then
     self:reset()

@@ -41,8 +41,7 @@ function icmp.send(IP, type, payload, expectResponse)
     return result
   end
   if(expectResponse) then
-    local message = multiport.requestMessageWithTimeout(packet
-    , false, false, 5, 1, function(message) return message.header.targetPort == icmpPort and message.header.protocol == icmpProtocol end)
+    local message = multiport.requestMessageWithTimeout(packet, false, 5, 1, function(message) return message.header.targetPort == icmpPort and message.header.protocol == icmpProtocol end)
     return message
   else
     multiport.send(packet)

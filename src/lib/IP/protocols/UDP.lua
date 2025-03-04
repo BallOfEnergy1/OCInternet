@@ -45,24 +45,24 @@ function udp.pullUDP(port, timeout, callback)
   end
 end
 
-function udp.send(IP, port, payload, protocol, skipRegistration, MAC)
+function udp.send(IP, port, payload, protocol, MAC)
   local packer = hyperPack:new()
   packer:pushValue(protocol)
-  packer:pushValue(#serialization.serialize(payload))
+  packer:pushValue(#serialization.serialize(payload)) -- TODO: Change to hyperpack for length det.
   packer:pushValue(payload)
   local data = packer:serialize()
-  local packet = Packet:new(udpProtocol, IP, port, data, MAC, skipRegistration)
-  multiport.send(packet, skipRegistration)
+  local packet = Packet:new(udpProtocol, IP, port, data, MAC)
+  multiport.send(packet)
 end
 
-function udp.broadcast(port, payload, protocol, skipRegistration)
+function udp.broadcast(port, payload, protocol)
   local packer = hyperPack:new()
   packer:pushValue(protocol)
-  packer:pushValue(#serialization.serialize(payload))
+  packer:pushValue(#serialization.serialize(payload)) -- TODO: Change to hyperpack for length det.
   packer:pushValue(payload or "")
   local data = packer:serialize()
-  local packet = Packet:new(udpProtocol, _G.IP.constants.broadcastIP, port, data, nil, skipRegistration)
-  multiport.broadcast(packet, skipRegistration)
+  local packet = Packet:new(udpProtocol, _G.IP.constants.broadcastIP, port, data)
+  multiport.broadcast(packet)
 end
 
 return udp

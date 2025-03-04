@@ -16,7 +16,7 @@ local Packet = {
 
 local hyperPack = require("hyperpack")
 
-function Packet:new(protocol, targetIP, targetPort, data, MAC, noReg)
+function Packet:new(protocol, targetIP, targetPort, data, MAC)
   local o = {}
   setmetatable(o, self)
   self.__index = self
@@ -36,7 +36,7 @@ function Packet:new(protocol, targetIP, targetPort, data, MAC, noReg)
     o.data = ""
     return o
   end
-  if(not noReg) then
+  if(not _G.DHCP.skipRegister) then
     require("IP.protocols.DHCP").registerIfNeeded()
   end
   o.header.protocol = protocol

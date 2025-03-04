@@ -8,7 +8,7 @@ local subnet = {}
 function subnet.send(MAC, port, packet)
   local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
   if(util.getSubnet(packet.header.senderIP) ~= util.getSubnet(_G.IP.modems[addr].clientIP)) then
-    packetFrag.send(require("IP.protocols.ARP").resolve(_G.IP.defaultGateway, true), port, packet)
+    packetFrag.send(require("IP.protocols.ARP").resolve(_G.IP.defaultGateway), port, packet)
   else
     packetFrag.send(MAC, port, packet)
   end

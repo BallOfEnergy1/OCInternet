@@ -9,7 +9,8 @@ local startingRange = util.fromUserFormat("0880:0000:0000:0000")
 function apipa.register()
   ::start::
   local IP = util.createIP(startingRange, math.random(0xFFFFFFFF))
-  local result, code = ARP.resolve(IP, true)
+  _G.DHCP.skipRegister = true
+  local result, code = ARP.resolve(IP)
   if(result) then
     goto start
   end
@@ -22,6 +23,7 @@ function apipa.register()
   _G.IP.modems[addr].clientIP = IP
   _G.IP.modems[addr].defaultGateway = 0x00
   _G.IP.modems[addr].subnetMask = util.fromUserFormat("FFFF:FFFF:0000:0000")
+  _G.DHCP.skipRegister = false
 end
 
 return apipa
