@@ -2,7 +2,7 @@
 local RR = {
   name = nil,
   type = nil,
-  TTL = nil,
+  ttl = nil,
   data = nil
 }
 
@@ -26,7 +26,17 @@ function RR:serialize()
   packer:pushValue(self.type)
   packer:pushValue(self.ttl)
   packer:pushValue(self.data)
-  local fullPacket = packer:serialize()
-  return fullPacket
+  local record = packer:serialize()
+  return record
 end
+
+function RR:deserialize(record)
+  local packer = hyperPack:new():deserializeIntoClass(record)
+  self.name = packer:popValue()
+  self.type = packer:popValue()
+  self.ttl = packer:popValue()
+  self.data = packer:popValue()
+  return self
+end
+
 return RR

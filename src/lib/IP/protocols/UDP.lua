@@ -47,7 +47,7 @@ end
 
 function udp.send(IP, port, payload, protocol, MAC)
   local packer = hyperPack:new()
-  packer:pushValue(protocol)
+  packer:pushValue(protocol or 0) -- If 0, just assume some user-defined program has taken the reigns and go with it; separate by ports.
   packer:pushValue(#serialization.serialize(payload)) -- TODO: Change to hyperpack for length det.
   packer:pushValue(payload)
   local data = packer:serialize()
@@ -57,7 +57,7 @@ end
 
 function udp.broadcast(port, payload, protocol)
   local packer = hyperPack:new()
-  packer:pushValue(protocol)
+  packer:pushValue(protocol or 0) -- If 0, just assume some user-defined program has taken the reigns and go with it; separate by ports.
   packer:pushValue(#serialization.serialize(payload)) -- TODO: Change to hyperpack for length det.
   packer:pushValue(payload or "")
   local data = packer:serialize()

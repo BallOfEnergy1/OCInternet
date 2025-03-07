@@ -113,6 +113,11 @@ local DHCPServer = require("IP.protocols.DHCPServer")
 DHCPServer.setup(config)
 print("DHCP server started.")
 
+print("Starting DNS server...")
+local DNSServer = require("IP.protocols.DNSServer")
+DNSServer.setup(config)
+print("DNS server started.")
+
 print("Setting IP...")
 DHCP.release()
 _G.IP.modems[addr].clientIP = _G.IP.modems[addr].defaultGateway

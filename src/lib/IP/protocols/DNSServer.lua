@@ -29,11 +29,14 @@ end
 
 local function cutOutHeader(text)
   local start = text:find("\n")
+  if(start == nil) then
+    return text
+  end
   return text:sub(start + 1)
 end
 
 local function checkRRDir()
-  if(not fs.exists(_G.DNS.recordLocation) or not fs.isDirectory(_G.DNS.recordLocation)) then
+  if(not fs.exists(_G.DNS.recordLocation) or fs.isDirectory(_G.DNS.recordLocation)) then
     fs.remove(_G.DNS.recordLocation) -- Remove in-case it's a file.
     fs.makeDirectory(fs.path(_G.DNS.recordLocation)) -- Remake (or make for the first time) as a directory.
     io.open(_G.DNS.recordLocation, "w"):close()
@@ -41,6 +44,7 @@ local function checkRRDir()
 end
 
 local function readAllRRs()
+  checkRRDir()
   local RRFile
   do
     local handle = io.open(_G.DNS.recordLocation, "r")
@@ -161,10 +165,14 @@ local function writeRRToDisk(RR)
   end
   do
     local handle = io.open(_G.DNS.recordLocation, "w")
-    handle:write(_G.DNS.recordCompression and "Uncompressed" or _G.DNS.recordCompressionMode .. " DNS Records.\n")
-    handle:write(serializedData)
+    handle:write(_G.DNS.recordCompression and _G.DNS.recordCompressionMode or "Uncompressed" .. " DNS Records.\n")
+    handle:write(cutOutHeader(RRFile) .. makeSizeNumber(#serializedData, 3) .. serializedData)
     handle:close()
   end
+end
+
+function dnsServer.readAllRRs()
+  return readAllRRs()
 end
 
 function dnsServer.readRR(name, type)
@@ -198,6 +206,8 @@ function dnsServer.setup(config)
         onDNSMessage(packet)
       end
     end)
-    _G.DNS.isInitialized = true
+    _G.DNS.serverIsInitialized = true
   end
 end
+
+return dnsServer
