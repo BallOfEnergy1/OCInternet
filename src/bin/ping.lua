@@ -7,19 +7,6 @@ local event = require("event")
 
 local args, ops = shell.parse(...)
 
-local function makePayload(size)
-  local payload = ""
-  local counter = 0x61
-  for _ = 0, size do
-    payload = payload .. string.char(counter)
-    counter = counter + 1
-    if(counter > 0x7A) then
-      counter = 0x61
-    end
-  end
-  return payload
-end
-
 local function printInfo(IP, pings)
   print("Ping statistics for " .. IP .. ":")
   local received = 0
@@ -64,12 +51,11 @@ if(args[1] ~= nil and type(args[1]) == "string") then -- Take as IP.
     elseif(ops.t) then
       count = math.huge
     end
-    local payload = makePayload(payloadSize)
     for i = 1, count do
       local pcTime = require("computer").uptime()
       local uptime
       local response
-      response = ICMP.send(IP, 0x1A, payload, true)
+      response = ICMP.ping(IP, payloadSize)
       if(response == nil) then
         print("Ping timed out.")
         table.insert(pings, {received=false})

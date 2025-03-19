@@ -2,7 +2,7 @@
 local util = require("IP.IPUtil")
 
 if(not _G.TCP) then
-  print( "TCP not initialized.")
+  print("TCP not initialized.")
   return
 end
 

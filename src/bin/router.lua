@@ -14,8 +14,6 @@ print("Initializing router software...")
 
 print("Starting libraries...")
 
-_G.DHCP.static = true
-
 local config = {}
 loadfile("/etc/IP.conf", "t", config)()
 

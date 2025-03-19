@@ -38,6 +38,7 @@ function icmp.send(IP, type, payload, expectResponse)
       end, nil, nil, "ICMP Loopback Handler")
     end
     netAPIInternal.receiveInboundUnsafe(packet, 0)
+    netAPI.unregisterCallback(callback)
     return result
   end
   if(expectResponse) then
@@ -58,6 +59,36 @@ function icmp.setup()
       end
     end, nil, nil, "ICMP Handler")
   end
+end
+
+local function makePayload(size)
+  local payload = ""
+  local counter = 0x61
+  for _ = 0, size do
+    payload = payload .. string.char(counter)
+    counter = counter + 1
+    if(counter > 0x7A) then
+      counter = 0x61
+    end
+  end
+  return payload
+end
+
+function icmp.ping(IP, payload, attempts)
+  if(type(payload) == "number") then
+    payload = makePayload(payload)
+  end
+  if(attempts == nil or type(attempts) ~= "number") then
+    attempts = 1
+  end
+  local result
+  for _ = 1, attempts do
+    result = icmp.send(IP, 0x1A, payload, true)
+    if(result) then
+      return result
+    end
+  end
+  return result
 end
 
 return icmp
