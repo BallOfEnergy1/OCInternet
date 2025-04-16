@@ -1,5 +1,5 @@
 local subnet = require("IP.subnet")
-local netAPI = require("IP.netAPI")
+local netAPI = require("IP.API.netAPI")
 local netAPIInternal = require("IP.netAPIInternal")
 
 --- This class is the primary class for sending packets through a network.

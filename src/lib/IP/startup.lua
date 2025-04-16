@@ -3,12 +3,12 @@ local thread = require("thread")
 thread.create(function()
   local config = {}
   os.sleep(0.05)
-  loadfile("/etc/IP.conf", "t", config)()
+  loadfile("/etc/OCIP/IP.conf", "t", config)()
   local serializationUnsafe = require("IP.serializationUnsafe")
   -- Setup unsafe serialization library.
   serializationUnsafe.setup(config)
   
-  local netAPI = require("IP.netAPI")
+  local netAPI = require("lib.IP.API.netAPI")
   -- Setup netAPI library.
   netAPI.setup(config)
   

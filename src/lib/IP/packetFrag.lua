@@ -95,7 +95,10 @@ end
 function fragmentation.receive(_, receiverMAC, _, targetPort, dist, message)
   -- This is just... terrible.....
   local instance = hyperPack:new()
-  instance:deserializeIntoClass(message)
+  local success = instance:deserializeIntoClass(message)
+  if(not success) then
+    return
+  end
   local temporaryPacket = Packet:new()
   temporaryPacket:buildFromHyperPack(instance)
   if(temporaryPacket.header.targetMAC ~= receiverMAC and temporaryPacket.header.targetMAC ~= _G.IP.constants.broadcastMAC) then

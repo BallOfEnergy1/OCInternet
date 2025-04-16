@@ -15,7 +15,7 @@ print("Initializing router software...")
 print("Starting libraries...")
 
 local config = {}
-loadfile("/etc/IP.conf", "t", config)()
+loadfile("/etc/OCIP/IP.conf", "t", config)()
 
 local IPUtil = require("IP.IPUtil")
 print(">IPUtil begin")
@@ -121,7 +121,7 @@ DHCP.release()
 _G.IP.modems[addr].clientIP = _G.IP.modems[addr].defaultGateway
 print("IP set to " .. IPUtil.toUserFormat(_G.IP.modems[addr].clientIP))
 
-local api  = require("IP.netAPI")
+local api = require("IP.API.netAPI")
 local tableUtil = require("tableutil")
 
 api.registerReceivingCallback(function(message) -- Check for broadcasts and filter out.

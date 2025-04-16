@@ -58,7 +58,11 @@ function dhcp.registerIfNeeded()
     --------------------------------------------------------------------------------
     _G.IP.logger.write("#[DHCP] DHCP registration success.")
     _G.DHCP.DHCPRegisteredModems[addr]        = true
-    local packer = hyperPack:new():deserializeIntoClass(message.data)
+    local packer = hyperPack:new()
+    local success, reason = packer:deserializeIntoClass(message.data)
+    if(not success) then
+      _G.IP.logger.write("Failed to unpack DHCP data: " .. reason)
+    end
     _G.IP.modems[addr].clientIP               = packer:popValue()
     _G.IP.modems[addr].subnetMask             = packer:popValue()
     _G.IP.modems[addr].defaultGateway         = packer:popValue()

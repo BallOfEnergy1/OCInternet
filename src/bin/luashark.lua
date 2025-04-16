@@ -12,7 +12,7 @@ local event = require("event")
 local buttonLib = require("button")
 local serialization = require("IP.serializationUnsafe")
 local ipUtil = require("IP.IPUtil")
-local api    = require("IP.netAPI")
+local api    = require("IP.API.netAPI")
 local hyperPack = require("hyperpack")
 local Packet = require("IP.classes.PacketClass")
 
@@ -165,7 +165,10 @@ local function drawEntryScreen()
 end
 
 local function inferProtocolFromPacket(packet)
-  local packer = hyperPack:new():deserializeIntoClass(packet.data)
+  local success, packer = hyperPack.simpleUnpack()
+  if(not success) then
+    return "Unk."
+  end
   if(packet.header.protocol == 1) then
     return "ICMP"
   elseif(packet.header.protocol == 2) then
@@ -187,7 +190,10 @@ end
 
 local function inferInfoFromPacket(packet)
   local protocol = inferProtocolFromPacket(packet)
-  local packer = hyperPack:new():deserializeIntoClass(packet.data)
+  local success, packer = hyperPack:new():deserializeIntoClass(packet.data)
+  if(not success) then
+    return "Unk; Failed to unpack.", 0x992400
+  end
   if(protocol == "ICMP") then
     local type = packer:popValue()
     if(type == 0x1A) then

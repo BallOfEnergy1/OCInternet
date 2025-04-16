@@ -4,7 +4,7 @@ local serialization = require("IP.serializationUnsafe")
 local event = require("event")
 local Packet = require("IP.classes.PacketClass")
 local RingBuffer = require("IP.classes.RingBufferClass")
-local api = require("IP.netAPI")
+local api = require("IP.API.netAPI")
 
 local tcpProtocol = 5
 

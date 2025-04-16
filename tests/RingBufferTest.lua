@@ -2,7 +2,7 @@
 local RingBuffer = require("src.lib.IP.classes.RingBufferClass")
 
 local buffer = RingBuffer:new(5)
-print("Buffer created with size 5.")
+print("Buffer created with size " .. buffer.loopRange .. ".")
 print("Write #1 (15): " .. tostring(buffer:writeData(15)))
 print("Write #2 (20): " .. tostring(buffer:writeData(20)))
 print("Write #3 (25): " .. tostring(buffer:writeData(25)))

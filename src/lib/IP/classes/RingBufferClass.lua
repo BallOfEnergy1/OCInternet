@@ -19,7 +19,6 @@ function RingBuffer:new(loopRange)
   o.loopRange = loopRange
   o.writeIndex = 0
   o.readIndex = 0
-  o.loopRange = 0
   return o
 end
 

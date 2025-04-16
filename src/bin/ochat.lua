@@ -1,9 +1,8 @@
 
-local udp = require("IP.protocols.UDP")
+local simpleAPI = require("IP.API.simpleAPI")
 local tableutil = require("tableutil")
 local term = require("term")
 local util = require("IP.IPUtil")
-local hyperPack = require("hyperpack")
 
 local port = 555
 
@@ -30,7 +29,7 @@ local function clearMessages()
 end
 
 local function sendIndividualMessage(target, text)
-  udp.send(target, port, text)
+  simpleAPI.sendMessage(target, port, text)
 end
 
 -- TODO: Multicasting to chat groups for performance?
@@ -42,7 +41,7 @@ end
 
 -- TODO: Multicasting here too...
 local function broadcastMessage(text)
-  udp.broadcast(port, text)
+  simpleAPI.broadcastMessage(port, text)
 end
 
 local args, ops = require("shell").parse(...)
@@ -52,26 +51,20 @@ if(args[1] == "start-server") then
     print("Starting OChat server...")
     _G.OCHAT = {}
     _G.OCHAT.allClients = allClients -- sync em
-    _G.OCHAT.callback = udp.UDPListen(port, function(packet) -- Create server callback.
-      if(packet.data == 0xFF or packet.data == 0xFE or packet.data == 0xFD) then
+    _G.OCHAT.callback = simpleAPI.createMessageCallback(port, function(data, _, senderIP) -- Create server callback.
+      if(data == 0xFF or data == 0xFE or data == 0xFD) then
         return -- Ignore P2P packets in server mode.
       end
-      local packer = hyperPack:new():deserializeIntoClass(packet.data) -- Server-client format.
-      local data = packer:popValue()
-      local extra = packer:popValue() -- Mostly for username during connecting.
       if(data == 0xFC) then -- Server connect
-        if(not tableutil.tableContainsItem(allClients, packet.header.senderIP)) then
-          allClients[packet.header.senderIP] = {IP = packet.header.senderIP, user = extra}
+        if(not tableutil.tableContainsItem(allClients, senderIP)) then
+          allClients[senderIP] = {IP = senderIP, user = data[2]}
         end
       elseif(data == 0xFB) then -- Server disconnect
-        allClients[packet.header.senderIP] = nil
+        allClients[senderIP] = nil
       else
         for i, v in pairs(allClients) do -- Send message to all clients; TODO: Filtering?
-          if(v.IP ~= packet.header.senderIP) then -- Don't send back where it came from.
-            packer = hyperPack:new()
-            packer:pushValue(allClients[packet.header.senderIP].user)
-            packer:pushValue(data)
-            sendIndividualMessage(v.IP, packer:serialize())
+          if(v.IP ~= senderIP) then -- Don't send back where it came from.
+            sendIndividualMessage(v.IP, {allClients[senderIP].user, data[1]})
           end
         end
       end
@@ -90,7 +83,7 @@ elseif(args[1] == "stop-server") then
     for _, v in pairs(_G.OCHAT.allClients) do
       sendIndividualMessage(v.IP, 0xFA)
     end
-    udp.UDPIgnore(_G.OCHAT.callback)
+    simpleAPI.removeMessageCallback(_G.OCHAT.callback)
     _G.OCHAT = nil
     print("Stopped OChat server.")
   end
@@ -122,10 +115,7 @@ if(io.read() == "1") then -- aaaaa
     print("Server did not respond.")
     return
   end
-  local packer = hyperPack:new()
-  packer:pushValue(0xFC)
-  packer:pushValue(username)
-  sendIndividualMessage(serverAddress, packer:serialize())
+  sendIndividualMessage(serverAddress, {0xFC, username})
 end
 
 term.clear()
@@ -136,60 +126,57 @@ end
 
 local systemMessages = false
 
-local function receiveMessage(packet)
+local function receiveMessage(data, _, senderIP)
   if(serverMode) then
-    if(packet.data == 0xFF or packet.data == 0xFE or packet.data == 0xFD) then
+    if(data == 0xFF or data == 0xFE or data == 0xFD) then
       return -- Ignore P2P packets in server mode.
     end
-    if(packet.header.senderIP ~= serverAddress) then
+    if(senderIP ~= serverAddress) then
       return -- Ignore packets not from the server.
     end
-    if(packet.data == 0xFA) then -- Administrative disconnect.
+    if(data == 0xFA) then -- Administrative disconnect.
       displayMessage("Server forcefully closed connection.")
       return
     end
-    local packer = hyperPack:new():deserializeIntoClass(packet.data) -- Special formatting for users.
-    local user = packer:popValue()
-    local content = packer:popValue()
-    displayMessage("[" .. user .. "]> " .. content)
+    displayMessage("[" .. data[1] .. "]> " .. data[2])
     return
   end
   do -- Extremely similar to ARP or NRP, basically a primitive multicast/client finding algorithm.
-    if(packet.data == 0xFF) then -- Broadcast from other client.
-      if(packet.header.senderIP == _G.IP.primaryModem.clientIP) then -- this shouldn't be possible, but broadcasts are weird...
+    if(data == 0xFF) then -- Broadcast from other client.
+      if(senderIP == _G.IP.primaryModem.clientIP) then -- this shouldn't be possible, but broadcasts are weird...
         return
       end
-      sendIndividualMessage(packet.header.senderIP, 0xFE)
-      if(not tableutil.tableContainsItem(allClients, packet.header.senderIP)) then
-        table.insert(allClients, packet.header.senderIP)
+      sendIndividualMessage(senderIP, 0xFE)
+      if(not tableutil.tableContainsItem(allClients, senderIP)) then
+        table.insert(allClients, senderIP)
         if(systemMessages) then
-          displayMessage("System: Client " .. util.toUserFormat(packet.header.senderIP) .. " connected.")
+          displayMessage("System: Client " .. util.toUserFormat(senderIP) .. " connected.")
         end
       end
       return
-    elseif(packet.data == 0xFE) then -- Client response to broadcast.
-      if(not tableutil.tableContainsItem(allClients, packet.header.senderIP)) then
-        table.insert(allClients, packet.header.senderIP)
+    elseif(data == 0xFE) then -- Client response to broadcast.
+      if(not tableutil.tableContainsItem(allClients, senderIP)) then
+        table.insert(allClients, senderIP)
         if(systemMessages) then
-          displayMessage("System: Client " .. util.toUserFormat(packet.header.senderIP) .. " connected.")
+          displayMessage("System: Client " .. util.toUserFormat(senderIP) .. " connected.")
         end
       end
       return
-    elseif(packet.data == 0xFD) then -- Client (graceful) disconnect.
-      local contains, index = tableutil.tableContainsItem(allClients, packet.header.senderIP)
+    elseif(data == 0xFD) then -- Client (graceful) disconnect.
+      local contains, index = tableutil.tableContainsItem(allClients, senderIP)
       if(contains) then
         table.remove(allClients, index)
         if(systemMessages) then
-          displayMessage("System: Client " .. util.toUserFormat(packet.header.senderIP) .. " disconnected.")
+          displayMessage("System: Client " .. util.toUserFormat(senderIP) .. " disconnected.")
         end
       end
       return
     end
   end
-  displayMessage("[" .. util.toUserFormat(packet.header.senderIP) .. "]> " .. packet.data)
+  displayMessage("[" .. util.toUserFormat(senderIP) .. "]> " .. data)
 end
 
-local callback = udp.UDPListen(port, receiveMessage)
+local callback = simpleAPI.createMessageCallback(port, receiveMessage)
 
 if(not serverMode) then
   displayMessage("Finding clients...")
@@ -242,10 +229,7 @@ while not event.pull(0.05, "interrupted") do
     end
   elseif(input ~= "") then
     if(serverMode) then
-      local packer = hyperPack:new()
-      packer:pushValue(input)
-      packer:pushValue("")
-      sendIndividualMessage(serverAddress, packer:serialize())
+      sendIndividualMessage(serverAddress, {input, ""})
     else
       sendMessage(input)
     end
@@ -261,10 +245,7 @@ print("\nExiting OChat...")
 if(not serverMode) then
   broadcastMessage(0xFD)
 else
-  local packer = hyperPack:new()
-  packer:pushValue(0xFB)
-  packer:pushValue("")
-  sendIndividualMessage(serverAddress, packer:serialize())
+  sendIndividualMessage(serverAddress, {0xFB, ""})
 end
 
-udp.UDPIgnore(callback)
+simpleAPI.removeMessageCallback(callback)

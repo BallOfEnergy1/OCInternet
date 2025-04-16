@@ -80,7 +80,11 @@ local function readAllRRs()
   while #RRFile > 0 do
     local nextLength = tonumber(RRFile:sub(1, 3))
     RRFile = RRFile:sub(4)
-    table.insert(records, RRClass:new():deserialize(RRFile:sub(1, nextLength)))
+    local success, result = RRClass:new():deserialize(RRFile:sub(1, nextLength))
+    if(not success) then
+      _G.IP.logger.write("Failed to deserialize record: " .. result)
+    end
+    table.insert(records, result)
     RRFile = RRFile:sub(nextLength + 1)
   end
   return records

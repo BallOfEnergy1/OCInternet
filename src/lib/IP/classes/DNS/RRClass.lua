@@ -31,12 +31,13 @@ function RR:serialize()
 end
 
 function RR:deserialize(record)
-  local packer = hyperPack:new():deserializeIntoClass(record)
-  self.name = packer:popValue()
-  self.type = packer:popValue()
-  self.ttl = packer:popValue()
-  self.data = packer:popValue()
-  return self
+  local instance = hyperPack:new()
+  local success, reason = instance:deserializeIntoClass(record)
+  self.name = instance:popValue()
+  self.type = instance:popValue()
+  self.ttl = instance:popValue()
+  self.data = instance:popValue()
+  return success, reason or self
 end
 
 return RR

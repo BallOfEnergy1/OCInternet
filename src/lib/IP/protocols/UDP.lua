@@ -1,7 +1,7 @@
 
 local multiport = require("IP.multiport")
 local serialization = require("IP.serializationUnsafe")
-local api    = require("IP.netAPI")
+local api    = require("IP.API.netAPI")
 local Packet = require("IP.classes.PacketClass")
 local hyperPack = require("hyperpack")
 
@@ -12,7 +12,12 @@ local udp = {}
 function udp.UDPListen(port, callback)
   local func = function(message)
     if(message.header.targetPort == port and message.header.protocol == udpProtocol) then
-      local packer = hyperPack:new():deserializeIntoClass(message.data)
+      local packer = hyperPack:new()
+      local success, reason = packer:deserializeIntoClass(message.data)
+      if(not success) then
+        _G.IP.logger.write("Failed to unpack UDP data: " .. reason)
+        return
+      end
       local tempPacket = Packet:new():copyFrom(message)
       tempPacket.udpProto = packer:popValue()
       tempPacket.udpLength = packer:popValue()
@@ -33,7 +38,11 @@ function udp.pullUDP(port, timeout, callback)
     return message.header.targetPort == port and message.header.protocol == udpProtocol
   end)
   if(packet) then
-    local packer = hyperPack:new():deserializeIntoClass(packet.data)
+    local packer = hyperPack:new()
+    local success, reason = packer:deserializeIntoClass(packet.data)
+    if(not success) then
+      _G.IP.logger.write("Failed to unpack UDP data: " .. reason)
+    end
     local tempPacket = Packet:new():copyFrom(packet)
     tempPacket.udpProto = packer:popValue()
     tempPacket.udpLength = packer:popValue()
@@ -49,6 +58,7 @@ function udp.send(IP, port, payload, protocol, MAC)
   local packer = hyperPack:new()
   packer:pushValue(protocol or 0) -- If 0, just assume some user-defined program has taken the reigns and go with it; separate by ports.
   packer:pushValue(#serialization.serialize(payload)) -- TODO: Change to hyperpack for length det.
+  packer:pushValue(type(payload) == "table")
   packer:pushValue(payload)
   local data = packer:serialize()
   local packet = Packet:new(udpProtocol, IP, port, data, MAC)
