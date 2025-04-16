@@ -144,12 +144,20 @@ function internalAccessAPI.get(code)
     local iterator = code:gmatch("[^%.]+")
     local first = iterator()
     local second = iterator()
-    if(first == "ip") then
-      error("Function not implemented.")
+    local success, result = pcall(function() return _G[first:upper()][second] end) -- this genuinely scares me
+    if(not success) then
+      --internalAccessAPI.get("ip.logger"):write("Error attempting to access internal field [" .. first .. "." .. second .. "]; " .. result)
     end
+    if(result == nil) then
+      --internalAccessAPI.get("ip.logger"):write("Error attempting to access internal field: [" .. first .. "." .. second .. "]; Could not find the specified field.")
+      return nil, "Could not find the specified field."
+    end
+    return result
   end
 end
 
 function internalAccessAPI.set(code, value)
   error("Function not implemented.")
 end
+
+return internalAccessAPI
