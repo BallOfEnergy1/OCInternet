@@ -5,7 +5,8 @@ local Callback = {
   name = "",
   callback = function()  end,
   amountCalled = 0,
-  errorHandler = function(error) _G.IP.logger.write(debug.traceback(error)) end
+  errorHandler = function(error) _G.IP.logger.write(debug.traceback(error)) end,
+  priority = 0
 }
 
 --- Creates a new Callback class instance.
@@ -14,9 +15,10 @@ local Callback = {
 --- @param callback function Function to call when callback is called.
 --- @param errorHandler function Error handler to use when callback fails/errors.
 --- @param name string Internal name to give callback.
+--- @param priority number Optional callback priority.
 --- @return Callback New Callback instance.
 --- @overload fun(callback:function):Callback
-function Callback:new(callback, errorHandler, name)
+function Callback:new(callback, errorHandler, name, priority)
   local o = {}
   setmetatable(o, self)
   self.__index = self
@@ -29,6 +31,7 @@ function Callback:new(callback, errorHandler, name)
   o.id = require("UUID").next()
   o.name = name or "Unnamed (" .. o.id:sub(1, 8) .. ")"
   o.amountCalled = 0
+  o.priority = priority or 0
   return o
 end
 

@@ -40,8 +40,10 @@ function icmp.send(IP, type, payload, expectResponse)
         end
       end, nil, nil, "ICMP Loopback Handler")
     end
-    netAPIInternal.receiveInboundUnsafe(packet, 0)
-    netAPI.unregisterCallback(callback)
+    netAPIInternal.receiveInboundUnsafe(packet, _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC, 0)
+    if(expectResponse) then
+      netAPI.unregisterCallback(callback)
+    end
     return result
   end
   if(expectResponse) then

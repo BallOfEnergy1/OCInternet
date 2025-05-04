@@ -14,7 +14,8 @@ function multiport.send(packet)
   if(not _G.DHCP.skipRegister) then
     require("IP.protocols.DHCP").registerIfNeeded()
   end
-  netAPIInternal.sendUnicastUnsafe(packet)
+  local address = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
+  netAPIInternal.sendUnicastUnsafe(packet, address)
   subnet.send(packet.header.targetMAC, multiportPort, packet)
 end
 
@@ -27,7 +28,8 @@ function multiport.broadcast(packet)
   if(not _G.DHCP.skipRegister) then
     require("IP.protocols.DHCP").registerIfNeeded()
   end
-  netAPIInternal.sendBroadcastUnsafe(packet)
+  local address = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
+  netAPIInternal.sendBroadcastUnsafe(packet, address)
   subnet.broadcast(multiportPort, packet)
 end
 
@@ -83,9 +85,9 @@ end
 --- @param dist number Packet sent distance.
 --- @param message Packet Received packet.
 --- @private
-function multiport.process(targetPort, dist, message)
+function multiport.process(receiverMAC, targetPort, dist, message)
   if(targetPort == multiportPort) then
-    netAPIInternal.receiveInboundUnsafe(message, dist)
+    netAPIInternal.receiveInboundUnsafe(message, receiverMAC, dist)
   end
 end
 

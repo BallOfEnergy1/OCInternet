@@ -25,6 +25,7 @@ IP - General IP handler.
   ip.modems
   ip.primaryModem
   ip.isInitialized
+  ip.config
 
 frag - Packet fragmentation subsystem.
   frag.staticMTU
@@ -47,6 +48,7 @@ netAPI - Network API.
 
 arp - ARP protocol.
   arp.cachedMappings
+  arp.staticMappings
   arp.isInitialized
   arp.callback
   
@@ -146,10 +148,10 @@ function internalAccessAPI.get(code)
     local second = iterator()
     local success, result = pcall(function() return _G[first:upper()][second] end) -- this genuinely scares me
     if(not success) then
-      --internalAccessAPI.get("ip.logger"):write("Error attempting to access internal field [" .. first .. "." .. second .. "]; " .. result)
+      internalAccessAPI.get("ip.logger"):write("Error attempting to access internal field [" .. first .. "." .. second .. "]; " .. result)
     end
     if(result == nil) then
-      --internalAccessAPI.get("ip.logger"):write("Error attempting to access internal field: [" .. first .. "." .. second .. "]; Could not find the specified field.")
+      internalAccessAPI.get("ip.logger"):write("Error attempting to access internal field: [" .. first .. "." .. second .. "]; Could not find the specified field.")
       return nil, "Could not find the specified field."
     end
     return result
@@ -157,7 +159,43 @@ function internalAccessAPI.get(code)
 end
 
 function internalAccessAPI.set(code, value)
-  error("Function not implemented.")
+  assert(type(code) == "string", "Access code must be a string.")
+  if(code:sub(0, 2) == "s:") then -- shortcut code.
+    code = code:sub(3)
+    local iterator = code:gmatch("[^%.]+")
+    local first = iterator()
+    local second = iterator()
+    if(first == "ip") then
+      if(second == "ready") then
+        _G.IP.isInitialized = value
+      elseif(second == "primaryIP") then
+        _G.IP.primaryModem.clientIP = value
+      elseif(second == "primaryMask") then
+        _G.IP.primaryModem.subnetMask = value
+      elseif(second == "primaryGateway") then
+        _G.IP.primaryModem.defaultGateway = value
+      elseif(second == "primaryMAC") then
+        internalAccessAPI.get("ip.logger"):write("Error attempting to access internal field [" .. first .. "." .. second .. "]; Cannot modify this field.")
+      elseif(second == "primaryProxy") then
+        internalAccessAPI.get("ip.logger"):write("Error attempting to access internal field [" .. first .. "." .. second .. "]; Cannot modify this field.")
+      end
+    elseif(first == "stack") then -- These two are ripped straight from the netAPI file.
+      if(second == "openInboundConnections") then
+        internalAccessAPI.get("ip.logger"):write("Error attempting to access internal field [" .. first .. "." .. second .. "]; Cannot modify this field.")
+      elseif(second == "openInboundConnections") then
+        internalAccessAPI.get("ip.logger"):write("Error attempting to access internal field [" .. first .. "." .. second .. "]; Cannot modify this field.")
+      end
+    end
+    return
+  else
+    local iterator = code:gmatch("[^%.]+")
+    local first = iterator()
+    local second = iterator()
+    local success, result = pcall(function() _G[first:upper()][second] = value end) -- this genuinely scares me
+    if(not success) then
+      internalAccessAPI.get("ip.logger"):write("Error attempting to access internal field [" .. first .. "." .. second .. "]; " .. result)
+    end
+  end
 end
 
 return internalAccessAPI

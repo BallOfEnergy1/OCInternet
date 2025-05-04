@@ -111,6 +111,14 @@ function util.getID(IP)
   return IP & (~_G.IP.modems[addr].subnetMask)
 end
 
+--- Checks if a given MAC address is valid.
+---
+--- @param MAC number MAC address to check validity of.
+--- @return boolean If the address is valid.
+function util.isValidMAC(MAC)
+  return type(MAC) == "string" and (MAC:sub(9, 9) .. MAC:sub(14, 14) .. MAC:sub(19, 19) .. MAC:sub(24, 24) == "----")
+end
+
 --- @class Modem
 local Modem = {
   clientIP = 0,
@@ -170,6 +178,8 @@ function util.setup(config)
       end
     end
     packetFrag.setup(config)
+    --- Config table for use after initialization.
+    _G.IP.config = config
     --- Initialization token.
     _G.IP.isInitialized = true
   end

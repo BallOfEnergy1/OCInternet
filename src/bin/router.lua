@@ -123,6 +123,7 @@ print("IP set to " .. IPUtil.toUserFormat(_G.IP.modems[addr].clientIP))
 
 local api = require("IP.API.netAPI")
 local tableUtil = require("tableutil")
+local access = require("IP.API.internalAccessAPI")
 
 api.registerReceivingCallback(function(message) -- Check for broadcasts and filter out.
   if(not (tableUtil.tableContainsItem({_G.IP.constants.broadcastIP, _G.IP.constants.internalIP}, message.header.senderIP)
@@ -131,3 +132,7 @@ api.registerReceivingCallback(function(message) -- Check for broadcasts and filt
     -- TODO: Implement RIPv2 for routing.
   end
 end, nil, nil, "Routing Handler")
+
+print("Resetting ARP entries...")
+access.set("arp.isInitialized", false)
+ARP.setup(config)

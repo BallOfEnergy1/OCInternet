@@ -40,7 +40,7 @@ function subnet.receive(receiverMAC, targetPort, dist, message)
   local packet = message
   if(util.getSubnet(packet.header.senderIP) == util.getSubnet(_G.IP.modems[receiverMAC].clientIP)
     or tableUtil.tableContainsItem({_G.IP.constants.broadcastIP, _G.IP.constants.internalIP}, packet.header.targetIP)) then
-    require("IP.multiport").process(targetPort, dist, message)
+    require("IP.multiport").process(receiverMAC, targetPort, dist, message)
   end
 end
 

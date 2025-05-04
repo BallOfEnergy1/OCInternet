@@ -24,7 +24,7 @@ local function onDHCPMessage(receivedPacket)
       return
     end
     _G.DHCP.IPIndex = _G.DHCP.allRegisteredMACs[receivedPacket.header.senderMAC].index
-    _G.DHCP.allRegisteredMACs[receivedPacket.header.senderMAC] = {}
+    _G.DHCP.allRegisteredMACs[receivedPacket.header.senderMAC] = nil
     return
   end
   _G.IP.logger.write("#[DHCPServer] Recieved DHCP request from '" .. receivedPacket.header.senderMAC .. "'.")

@@ -8,7 +8,7 @@ thread.create(function()
   -- Setup unsafe serialization library.
   serializationUnsafe.setup(config)
   
-  local netAPI = require("lib.IP.API.netAPI")
+  local netAPI = require("IP.API.netAPI")
   -- Setup netAPI library.
   netAPI.setup(config)
   
@@ -18,7 +18,7 @@ thread.create(function()
   
   local ARP = require("IP.protocols.ARP")
   -- Setup ARP protocol.
-  ARP.setup() -- Init ARP before DHCP in-case APIPA is used.
+  ARP.setup(config) -- Init ARP before DHCP in-case APIPA is used.
   os.sleep(0.05) -- Give OS time to initialize.
   
   local DHCP = require("IP.protocols.DHCP")

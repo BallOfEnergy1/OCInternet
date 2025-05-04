@@ -12,17 +12,16 @@ local arp = {}
 
 local timeout = 300
 
-local function onARPMessage(receivedPacket)
-  local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
+local function onARPMessage(receivedPacket, MAC)
   local instance = hyperPack:new()
   local success = instance:deserializeIntoClass(receivedPacket.data)
   if(not success) then
     return
   end
-  if(instance:popValue() == 1 --[[ ARP Request ]] and instance:popValue() == _G.IP.modems[addr].clientIP) then
+  if(instance:popValue() == 1 --[[ ARP Request ]] and instance:popValue() == _G.IP.modems[MAC].clientIP) then
     instance = hyperPack:new()
     instance:pushValue(2) -- ARP Reply
-    instance:pushValue(_G.IP.modems[addr].MAC)
+    instance:pushValue(_G.IP.modems[MAC].MAC)
     local data = instance:serialize()
     multiport.send(Packet:new(arpProtocol, receivedPacket.header.senderIP, arpPort, data, receivedPacket.header.senderMAC))
   end
@@ -33,11 +32,21 @@ local function getTimeout(time)
 end
 
 function arp.resolve(IP)
-  for MAC, IPtable in pairs(_G.ARP.cachedMappings) do
-    if(IPtable.IP == IP and IPtable.timeout > require("computer").uptime()) then
-      return MAC
-    elseif IPtable.timeout < require("computer").uptime() then
-      arp.trimCache()
+  local modemMAC = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
+  if(_G.ARP.staticMappings[modemMAC]) then
+    for MAC, IPtable in pairs(_G.ARP.staticMappings[modemMAC]) do
+      if(IPtable.IP == IP) then
+        return MAC
+      end
+    end
+  end
+  if(_G.ARP.cachedMappings[modemMAC]) then
+    for MAC, IPtable in pairs(_G.ARP.cachedMappings[modemMAC]) do
+      if(IPtable.IP == IP and IPtable.timeout > require("computer").uptime()) then
+        return MAC
+      elseif IPtable.timeout < require("computer").uptime() then
+        arp.trimCache()
+      end
     end
   end
   local packer = hyperPack:new()
@@ -65,47 +74,86 @@ function arp.resolve(IP)
 end
 
 function arp.trimCache()
-  for MAC, IPtable in pairs(_G.ARP.cachedMappings) do
-    if(IPtable.timeout > require("computer").uptime()) then
-      _G.ARP.cachedMappings[MAC] = nil
+  for modemMAC, interface in pairs(_G.ARP.cachedMappings) do
+    for MAC, IPtable in pairs(interface) do
+      if(IPtable.timeout < require("computer").uptime()) then
+        _G.ARP.cachedMappings[modemMAC][MAC] = nil
+      end
     end
   end
 end
 
-function arp.updateCache(packet)
+function arp.updateCache(packet, modemMAC)
   if(packet.header.senderIP == _G.IP.constants.broadcastIP) then
     return
   end
   if(packet.header.senderIP == _G.IP.constants.internalIP or packet.header.targetIP == _G.IP.constants.internalIP) then
     return
   end
-  for MAC, IPtable in pairs(_G.ARP.cachedMappings) do
+  if(not _G.ARP.cachedMappings[modemMAC]) then _G.ARP.cachedMappings[modemMAC] = {} end
+  for MAC, IPtable in pairs(_G.ARP.cachedMappings[modemMAC]) do
     if(IPtable.IP == packet.header.senderIP and MAC == packet.header.senderMAC) then
       IPtable.timeout = getTimeout(timeout)
     end
   end
   -- IP not found on network.
-  _G.ARP.cachedMappings[packet.header.senderMAC] = {IP = packet.header.senderIP, timeout = getTimeout(timeout)} -- 5 minutes (normally would be 240 but bro what this is OC).
+  _G.ARP.cachedMappings[modemMAC][packet.header.senderMAC] = {IP = packet.header.senderIP, timeout = getTimeout(timeout)} -- 5 minutes (normally would be 240 but bro what this is OC).
   return
 end
 
-function arp.setup()
+function arp.writeToDB()
+  require("filesystem").remove(_G.ARP.dbLocation)
+  local handle = io.open(_G.ARP.dbLocation, "w")
+  local filtered = {}
+  for i, v in pairs(_G.ARP.staticMappings) do
+    local interface = {}
+    for j, w in pairs(v) do
+      if(not v.ignore) then
+        interface[j] = w
+      end
+    end
+    if(#interface ~= 0) then
+      filtered[i] = interface
+    end
+  end
+  handle:write(require("serialization").serialize(filtered))
+  handle:close()
+end
+
+function arp.setup(config)
   if(not _G.ARP or not _G.ARP.isInitialized) then
     _G.ARP = {}
+    _G.ARP.dbLocation = config.ARP.dbLocation
     do
       _G.ARP.cachedMappings = {
         -- "mac" = IP, timeout
       }
-    end
-    _G.ARP.isInitialized = true
-    
-    _G.ARP.callback = api.registerReceivingCallback(function(message)
-      arp.updateCache(message)
-      if(message.header.targetPort == arpPort and message.header.protocol == arpProtocol) then
-        onARPMessage(message)
+      _G.ARP.staticMappings = {
+        -- "mac" = IP
+      }
+      for _, v in pairs(_G.IP.modems) do
+        _G.ARP.staticMappings[v.MAC] = {}
+        _G.ARP.staticMappings[v.MAC][v.MAC] = {IP = v.clientIP, ignore = true}
       end
-    end, nil, nil, "ARP Handler")
+      local handle = io.open(_G.ARP.dbLocation, "r")
+      if(handle ~= nil) then
+        local data = handle:read("*a")
+        local staticTable = require("serialization").unserialize(data) -- listen, this is ok only because it's ONLY on initialization. ANYWHERE ELSE, and I'd be shitting myself at the sight of this.
+        for _, v in pairs(staticTable) do
+          _G.ARP.staticMappings[v.INT][v.MAC] = {IP = v.IP, ignore = false}
+        end
+        handle:close()
+      end
+    end
+    
+    _G.ARP.callback = api.registerReceivingCallback(function(message, _, MAC)
+      arp.updateCache(message, MAC)
+      if(message.header.targetPort == arpPort and message.header.protocol == arpProtocol) then
+        onARPMessage(message, MAC)
+      end
+    end, nil, nil, "ARP Handler", 2)
     event.timer(timeout * 1.5, arp.trimCache, math.huge)
+    _G.ARP.isInitialized = true
   end
 end
 
