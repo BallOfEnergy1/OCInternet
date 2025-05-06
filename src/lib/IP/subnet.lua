@@ -13,21 +13,23 @@ local subnet = {}
 --- @param packet Packet Packet to send.
 --- @return nil
 function subnet.send(MAC, port, packet)
-  local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
-  if(util.getSubnet(packet.header.senderIP) ~= util.getSubnet(_G.IP.modems[addr].clientIP)) then
-    packetFrag.send(require("IP.protocols.ARP").resolve(_G.IP.defaultGateway), port, packet)
+  local modem = _G.IP.modems[packet.header.senderMAC]
+  if(util.getSubnet(packet.header.senderIP) ~= util.getSubnet(_G.IP.modems[packet.header.senderMAC].clientIP)) then
+    packetFrag.send(modem.modem, require("IP.protocols.ARP").resolve(_G.IP.defaultGateway), port, packet)
   else
-    packetFrag.send(MAC, port, packet)
+    packetFrag.send(modem.modem, MAC, port, packet)
   end
 end
 
 --- Broadcasts a packet (no additional processing).
 ---
+--- @param senderMAC string Modem MAC to broadcast packet from.
 --- @param port number Target port.
 --- @param packet Packet Packet to send.
 --- @return nil
-function subnet.broadcast(port, packet)
-  packetFrag.broadcast(port, packet)
+function subnet.broadcast(senderMAC, port, packet)
+  local modem = _G.IP.modems[senderMAC]
+  packetFrag.broadcast(modem.modem, port, packet)
 end
 
 --- Internal subnet library receiver function.

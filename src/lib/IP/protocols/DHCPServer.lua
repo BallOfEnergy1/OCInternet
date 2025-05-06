@@ -18,7 +18,7 @@ function dhcpServer.flushAllAndNotify() -- This is to prevent the IP space from 
   _G.DHCP.IPIndex = 0
 end
 
-local function onDHCPMessage(receivedPacket)
+local function onDHCPMessage(receivedPacket, receiverMAC)
   if(receivedPacket.data == 0x10) then
     if(not _G.DHCP.allRegisteredMACs[receivedPacket.header.senderMAC]) then
       return
@@ -52,13 +52,12 @@ local function onDHCPMessage(receivedPacket)
     IP = util.createIP(_G.DHCP.subnetIdentifier, _G.DHCP.IPIndex)
   end
   _G.IP.logger.write("#[DHCPServer] Sending IP '" .. IP .. "' to client.")
-  local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
   local packer = hyperPack:new()
   packer:pushValue(IP)
   packer:pushValue(_G.DHCP.providedSubnetMask)
-  packer:pushValue(_G.IP.modems[addr].defaultGateway)
+  packer:pushValue(_G.DHCP.providedDefaultGateway)
   local data = packer:serialize()
-  udp.send(0, dhcpClientPort, data, dhcpUDPProtocol, receivedPacket.header.senderMAC)
+  udp.send(0, dhcpClientPort, data, dhcpUDPProtocol, receivedPacket.header.senderMAC, receiverMAC)
   _G.DHCP.allRegisteredMACs[receivedPacket.header.senderMAC] = {ip = IP, index = _G.DHCP.IPIndex}
 end
 
@@ -73,8 +72,9 @@ end
 function dhcpServer.setup(config)
   DHCP.setup(config)
   local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
-  _G.DHCP.providedSubnetMask = _G.IP.modems[addr].subnetMask
-  _G.DHCP.subnetIdentifier = util.getSubnet(_G.IP.modems[addr].clientIP)
+  _G.DHCP.providedSubnetMask = util.fromUserFormat(config.DHCPServer.providedSubnetMask)
+  _G.DHCP.providedDefaultGateway = util.fromUserFormat(config.DHCPServer.providedDefaultGateway)
+  _G.DHCP.subnetIdentifier = util.fromUserFormat(config.DHCPServer.providedSubnetID)
   _G.DHCP.IPIndex = config.DHCPServer.startingIndex
   _G.DHCP.userReservedIPs = config.DHCPServer.reservedIPs
   _G.DHCP.allRegisteredMACs = {}
@@ -83,9 +83,9 @@ function dhcpServer.setup(config)
     1, -- IP 1
     ~_G.DHCP.providedSubnetMask -- Last IP in the system.
   }
-  _G.DHCP.serverCallback = udp.UDPListen(dhcpServerPort, function(packet)
+  _G.DHCP.serverCallback = udp.UDPListen(dhcpServerPort, function(packet, receiverMAC)
     if(packet.udpProto == dhcpUDPProtocol) then
-      onDHCPMessage(packet)
+      onDHCPMessage(packet, receiverMAC)
     end
   end)
 end

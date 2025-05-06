@@ -27,7 +27,8 @@ function icmp.send(IP, type, payload, expectResponse)
   packer:pushValue(type)
   packer:pushValue(payload)
   local data = packer:serialize()
-  local packet = Packet:new(icmpProtocol, IP, icmpPort, data)
+  local senderMAC = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
+  local packet = Packet:new(senderMAC, icmpProtocol, IP, icmpPort, data)
   if(IP == (_G.ROUTE and _G.ROUTE.routeModem.clientIP or _G.IP.primaryModem.clientIP)) then
     local netAPI = require("IP.API.netAPI")
     local netAPIInternal = require("IP.netAPIInternal")
@@ -40,7 +41,7 @@ function icmp.send(IP, type, payload, expectResponse)
         end
       end, nil, nil, "ICMP Loopback Handler")
     end
-    netAPIInternal.receiveInboundUnsafe(packet, _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC, 0)
+    netAPIInternal.receiveInboundUnsafe(packet, senderMAC, 0)
     if(expectResponse) then
       netAPI.unregisterCallback(callback)
     end

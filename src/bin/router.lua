@@ -134,5 +134,6 @@ api.registerReceivingCallback(function(message) -- Check for broadcasts and filt
 end, nil, nil, "Routing Handler")
 
 print("Resetting ARP entries...")
-access.set("arp.isInitialized", false)
+access.set("arp.isInitialized", false) -- what the fuck
+require("IP.API.netAPI").unregisterCallback(access.get("arp.callback")) -- unregister the callback to prevent dereferencing the old callback
 ARP.setup(config)

@@ -16,7 +16,7 @@ local Packet = {
 
 local hyperPack = require("hyperpack")
 
-function Packet:new(protocol, targetIP, targetPort, data, MAC)
+function Packet:new(senderAddress, protocol, targetIP, targetPort, data, MAC)
   local o = {}
   setmetatable(o, self)
   self.__index = self
@@ -48,9 +48,8 @@ function Packet:new(protocol, targetIP, targetPort, data, MAC)
   else
     o.header.targetMAC = MAC or require("IP.protocols.ARP").resolve(targetIP)
   end
-  local addr = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
-  o.header.senderMAC  = _G.IP.modems[addr].MAC
-  o.header.senderIP   = _G.IP.modems[addr].clientIP
+  o.header.senderMAC  = _G.IP.modems[senderAddress].MAC
+  o.header.senderIP   = _G.IP.modems[senderAddress].clientIP
   o.header.targetIP   = targetIP
   o.data              = data
   o.seq = 1

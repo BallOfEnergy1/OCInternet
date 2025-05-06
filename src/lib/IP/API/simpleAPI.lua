@@ -9,6 +9,7 @@ local hyperpack = require("hyperpack")
 local UDP = require("IP.protocols.UDP")
 local IPUtil = require("IP.IPUtil")
 local multiport = require("IP.multiport")
+local netAPI = require("IP.API.netAPI")
 
 --- Sends a message to a client.
 --- @param IP number|string IP to send to (can be in decimal or fancy string format).
@@ -18,9 +19,9 @@ local multiport = require("IP.multiport")
 --- @overload fun(IP:number|string,port:number,data:any):void
 --- @return void
 function simpleAPI.sendMessage(IP, port, data, protocol)
-  assert(type(IP) ~= "string" and type(IP) ~= "number", "IP expected string or number, got " + type(IP))
-  assert(type(port) ~= "number", "Port expected number, got " + type(port))
-  assert(type(data) == "function", "Data cannot be a function.")
+  assert(type(IP) == "string" or type(IP) == "number", "IP expected string or number, got " .. type(IP))
+  assert(type(port) == "number", "Port expected number, got " .. type(port))
+  assert(type(data) ~= "function", "Data cannot be a function.")
   if(type(data) == "table") then
     data = hyperpack.simplePack(data)
   end
@@ -65,12 +66,20 @@ function simpleAPI.waitForMessage(port, IP, timeout)
   if(not result) then
     return false, "Timed out waiting for packet."
   end
-  local success, data = hyperpack.simpleUnpack(result.data)
+  local packer = hyperpack:new()
+  local success, reason = packer:deserializeIntoClass(result.data)
+  if(not success) then
+    _G.IP.logger.write("Failed to unpack UDP data: " .. reason)
+    return
+  end
+  packer:popValue()
+  packer:popValue()
+  local UDPData = packer:popValue()
   if(not success) then
     _G.IP.logger.write("Failed to unpack data string.")
     return false
   end
-  return true, data
+  return true, UDPData
 end
 
 --- Creates a callback to run when a message is received on a port from an IP (optional).
@@ -80,14 +89,23 @@ end
 --- @return Callback Callback object for finding information about the callback.
 --- @overload fun(port:number,callback:function):Callback
 function simpleAPI.createMessageCallback(IP, port, callback)
-  error("Function not implemented.")
+  return UDP.UDPListen(port, function(message)
+    if(message.header.targetPort == port) then
+      if(IP) then
+        if(message.header.senderIP == IP) then
+          callback(message.data, port, IP)
+        end
+      else
+        callback(message.data, port, message.header.senderIP)
+      end
+    end
+  end)
 end
 
 --- Removes a callback.
 --- @param callback Callback Callback object created when registering the callback.
---- @return boolean True if there was a callback to register, false otherwise.
 function simpleAPI.removeMessageCallback(callback)
-  error("Function not implemented.")
+  return UDP.UDPIgnore(callback)
 end
 
 return simpleAPI

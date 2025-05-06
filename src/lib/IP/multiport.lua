@@ -14,23 +14,21 @@ function multiport.send(packet)
   if(not _G.DHCP.skipRegister) then
     require("IP.protocols.DHCP").registerIfNeeded()
   end
-  local address = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
-  netAPIInternal.sendUnicastUnsafe(packet, address)
+  netAPIInternal.sendUnicastUnsafe(packet, packet.header.senderMAC)
   subnet.send(packet.header.targetMAC, multiportPort, packet)
 end
 
 --- Sends a packet of choice (broadcast).
 ---@param packet Packet The packet to broadcast.
 ---@return nil
-function multiport.broadcast(packet)
+function multiport.broadcast(packet, senderMAC)
   packet.header.targetMAC = _G.IP.constants.broadcastMAC
   packet.header.targetIP = _G.IP.constants.broadcastIP
   if(not _G.DHCP.skipRegister) then
     require("IP.protocols.DHCP").registerIfNeeded()
   end
-  local address = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
-  netAPIInternal.sendBroadcastUnsafe(packet, address)
-  subnet.broadcast(multiportPort, packet)
+  netAPIInternal.sendBroadcastUnsafe(packet, senderMAC)
+  subnet.broadcast(senderMAC, multiportPort, packet)
 end
 
 --- Waits for a message from another client for a specified timeout based on a defined condition.
@@ -62,13 +60,14 @@ end
 ---@param timeout number Timeout in seconds (per attempt).
 ---@param attempts number Amount of times to send the packet.
 ---@param eventCondition fun(packet:Packet):boolean The condition the function must satisfy to be returned (can be used for filtering to a port or protocol).
+---@param senderMAC string MAC address of the modem to send from. Only required for broadcast packets.
 ---@return Packet|nil
-function multiport.requestMessageWithTimeout(packet, broadcast, timeout, attempts, eventCondition)
+function multiport.requestMessageWithTimeout(packet, broadcast, timeout, attempts, eventCondition, senderMAC)
   local tries = 1
   local result
   while result == nil and tries <= attempts do
     if(broadcast) then
-      multiport.broadcast(packet)
+      multiport.broadcast(packet, senderMAC)
     else
       multiport.send(packet)
     end

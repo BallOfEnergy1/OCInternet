@@ -44,7 +44,8 @@ local Session = {
 }
 
 local function send(IP, port, payload)
-  local packet = Packet:new(tcpProtocol, IP, port, payload)
+  local address = _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC
+  local packet = Packet:new(address, tcpProtocol, IP, port, payload)
   multiport.send(packet)
 end
 
@@ -117,6 +118,7 @@ function Session:acceptConnection(SYNPacket)
   self.ackNum = SYNPacket.data.tcp.seqNum + 1
   self.seqNum = math.random(0xFFFFFFFF)
   local message = multiport.requestMessageWithTimeout(Packet:new(
+    SYNPacket.header.senderMAC,
     tcpProtocol,
     self.targetIP,
     self.targetPort,
@@ -199,6 +201,7 @@ function Session:start()
   self.status = "CLOSE"
   self.status = "SYN-SENT"
   local message = multiport.requestMessageWithTimeout(Packet:new(
+    _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC,
     tcpProtocol,
     self.targetIP,
     self.targetPort,
@@ -241,6 +244,7 @@ end
 function Session:stop()
   self.status = "FIN-WAIT-1"
   local message = multiport.requestMessageWithTimeout(Packet:new(
+    _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC,
     tcpProtocol,
     self.targetIP,
     self.targetPort,
@@ -289,6 +293,7 @@ function Session:send(payload)
   end
   ::start::
   local message = multiport.requestMessageWithTimeout(Packet:new(
+    _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC,
     tcpProtocol,
     self.targetIP,
     self.targetPort,

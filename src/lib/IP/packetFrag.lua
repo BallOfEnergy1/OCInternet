@@ -47,20 +47,20 @@ local function fragmentPacket(modem, port, packet, MAC)
 end
 
 --- Low-level sending of a packet, requires a MAC, port, and a packet.
+--- @param sendModem table Modem proxy to send packet over.
 --- @param MAC string MAC address of target.
 --- @param port number Target port.
 --- @param packet Packet Packet to send.
-function fragmentation.send(MAC, port, packet)
-  local modem = _G.ROUTE and _G.ROUTE.routeModem.modem or _G.IP.primaryModem.modem
-  fragmentPacket(modem, port, packet, MAC)
+function fragmentation.send(sendModem, MAC, port, packet)
+  fragmentPacket(sendModem, port, packet, MAC)
 end
 
 --- Low-level broadcasting of a packet, requires a port and a packet.
+--- @param sendModem table Modem proxy to send packet over.
 --- @param port number Target port.
 --- @param packet Packet Packet to send.
-function fragmentation.broadcast(port, packet)
-  local modem = _G.ROUTE and _G.ROUTE.routeModem.modem or _G.IP.primaryModem.modem
-  fragmentPacket(modem, port, packet)
+function fragmentation.broadcast(sendModem, port, packet)
+  fragmentPacket(sendModem, port, packet)
 end
 
 --- Standard setup function, for use during initialization.

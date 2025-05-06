@@ -23,7 +23,7 @@ local function onARPMessage(receivedPacket, MAC)
     instance:pushValue(2) -- ARP Reply
     instance:pushValue(_G.IP.modems[MAC].MAC)
     local data = instance:serialize()
-    multiport.send(Packet:new(arpProtocol, receivedPacket.header.senderIP, arpPort, data, receivedPacket.header.senderMAC))
+    multiport.send(Packet:new(MAC, arpProtocol, receivedPacket.header.senderIP, arpPort, data, receivedPacket.header.senderMAC))
   end
 end
 
@@ -53,7 +53,7 @@ function arp.resolve(IP)
   packer:pushValue(1) -- ARP Request
   packer:pushValue(IP)
   local data = packer:serialize()
-  local packet = Packet:new(arpProtocol, _G.IP.constants.broadcastIP, arpPort, data)
+  local packet = Packet:new(modemMAC, arpProtocol, _G.IP.constants.broadcastIP, arpPort, data)
   local message = multiport.requestMessageWithTimeout(packet, true, 3, 1,
     function(message)
       if(message.header.targetPort == arpPort and message.header.protocol == arpProtocol) then
@@ -61,12 +61,13 @@ function arp.resolve(IP)
         local success, reason = packer:deserializeIntoClass(message.data)
         if(not success) then
           _G.IP.logger.write("Failed to unpack ARP data: " .. reason)
+          return
         end
         if(packer:popValue() == 2) then -- ARP Reply
           return packer:popValue()
         end
       end
-    end)
+    end, modemMAC)
   if(message == nil) then
     return nil
   end

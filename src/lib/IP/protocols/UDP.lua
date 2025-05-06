@@ -10,7 +10,7 @@ local udpProtocol = 4
 local udp = {}
 
 function udp.UDPListen(port, callback)
-  local func = function(message)
+  local func = function(message, _, receiverMAC)
     if(message.header.targetPort == port and message.header.protocol == udpProtocol) then
       local packer = hyperPack:new()
       local success, reason = packer:deserializeIntoClass(message.data)
@@ -22,7 +22,7 @@ function udp.UDPListen(port, callback)
       tempPacket.udpProto = packer:popValue()
       tempPacket.udpLength = packer:popValue()
       tempPacket.data = packer:popValue()
-      callback(tempPacket)
+      callback(tempPacket, receiverMAC)
     end
   end
   local callbackObject = api.registerReceivingCallback(func, nil, nil, "UDP Callback Listener (Port " .. port .. ")")
@@ -54,24 +54,24 @@ function udp.pullUDP(port, timeout, callback)
   end
 end
 
-function udp.send(IP, port, payload, protocol, MAC)
+function udp.send(IP, port, payload, protocol, MAC, senderAddress)
   local packer = hyperPack:new()
   packer:pushValue(protocol or 0) -- If 0, just assume some user-defined program has taken the reigns and go with it; separate by ports.
   packer:pushValue(#serialization.serialize(payload)) -- TODO: Change to hyperpack for length det.
   packer:pushValue(payload)
   local data = packer:serialize()
-  local packet = Packet:new(udpProtocol, IP, port, data, MAC)
+  local packet = Packet:new(senderAddress or _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC, udpProtocol, IP, port, data, MAC)
   multiport.send(packet)
 end
 
-function udp.broadcast(port, payload, protocol)
+function udp.broadcast(port, payload, protocol, senderAddress)
   local packer = hyperPack:new()
   packer:pushValue(protocol or 0) -- If 0, just assume some user-defined program has taken the reigns and go with it; separate by ports.
   packer:pushValue(#serialization.serialize(payload)) -- TODO: Change to hyperpack for length det.
   packer:pushValue(payload or "")
   local data = packer:serialize()
-  local packet = Packet:new(udpProtocol, _G.IP.constants.broadcastIP, port, data)
-  multiport.broadcast(packet)
+  local packet = Packet:new(senderAddress or _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC, udpProtocol, _G.IP.constants.broadcastIP, port, data)
+  multiport.broadcast(packet, senderAddress or _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC)
 end
 
 return udp
