@@ -248,7 +248,7 @@ local function drawInterfaceScreen()
   gpu.set(2, 2, (capturing and "Stop Capturing" or "Start Capturing"))
   gpu.setBackground(backgroundColor)
   gpu.set(2, 3, "No.    Time      Source               Destination          Protocol  Length   Info")
-  scroll = math.max(0, #packetsOnInterface - resY - 4)
+  scroll = math.max(0, #packetsOnInterface - resY + 4)
   for i, v in pairs(packetsOnInterface) do
     if(i > scroll) then
       if(showExtendedInfo) then

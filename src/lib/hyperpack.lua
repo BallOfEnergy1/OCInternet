@@ -88,6 +88,8 @@ local function validateAndUnpack(serialized)
   if(not success) then
     return false, "Unknown failure, Format string: " .. format .. "; Reason: " .. result
   end
+  result["n"] = nil
+  table.remove(result)
   -- And finally...
   return true, format, result
 end
@@ -177,16 +179,14 @@ function Hyperpack:deserializeIntoClass(packedString)
   self.format = format
   local formatIndex = 1
   for i, v in pairs(result) do
-    if(i ~= "n") then
-      if(self.format:sub(formatIndex, formatIndex) == "b") then
-        if(v == 1) then
-          self.values[i] = true
-        else
-          self.values[i] = false
-        end
+    if(self.format:sub(formatIndex, formatIndex) == "b") then
+      if(v == 1) then
+        self.values[i] = true
       else
-        self.values[i] = v
+        self.values[i] = false
       end
+    else
+      self.values[i] = v
     end
     formatIndex = formatIndex + #getFormatString(v)
   end
@@ -208,6 +208,23 @@ function Hyperpack:popValue()
   self.readIndex = self.readIndex + 1
   return value
 end
+
+
+--- Pops the remaining values off the Hyperpack stack into a table.
+---
+--- @return table
+function Hyperpack:popRemaining()
+  local value = self.values[self.readIndex]
+  local values = {}
+  while value ~= nil do
+    self.values[self.readIndex] = nil
+    self.readIndex = self.readIndex + 1
+    table.insert(values, value)
+    value = self.values[self.readIndex]
+  end
+  return values
+end
+
 
 --- Copies a given Hyperpack class to this instance.
 ---

@@ -34,8 +34,14 @@ end
 
 -- TODO: Multicasting to chat groups for performance?
 local function sendMessage(text)
-  for _, v in pairs(allClients) do
-    sendIndividualMessage(v.IP, text)
+  if(_G.OCHAT and _G.OCHAT.isInitialized) then
+    for _, v in pairs(allClients) do
+      sendIndividualMessage(v.IP, text)
+    end
+  else
+    for _, v in pairs(allClients) do
+      sendIndividualMessage(v, text)
+    end
   end
 end
 
@@ -51,15 +57,19 @@ if(args[1] == "start-server") then
     print("Starting OChat server...")
     _G.OCHAT = {}
     _G.OCHAT.allClients = allClients -- sync em
-    _G.OCHAT.callback = simpleAPI.createMessageCallback(nil, port, function(data) -- Create server callback.
+    _G.OCHAT.callback = simpleAPI.createMessageCallback(nil, port, function(data, _, senderIP) -- Create server callback.
       if(data == 0xFF or data == 0xFE or data == 0xFD) then
         return -- Ignore P2P packets in server mode.
       end
-      if(data == 0xFC) then -- Server connect
+      if(type(data) ~= "table") then
+        return
+      end
+      if(data[1] == 0xFC) then -- Server connect
         if(not tableutil.tableContainsItem(allClients, senderIP)) then
+          _G.IP.logger.write(senderIP .. " " .. data[2])
           allClients[senderIP] = {IP = senderIP, user = data[2]}
         end
-      elseif(data == 0xFB) then -- Server disconnect
+      elseif(data[1] == 0xFB) then -- Server disconnect
         allClients[senderIP] = nil
       else
         for i, v in pairs(allClients) do -- Send message to all clients; TODO: Filtering?

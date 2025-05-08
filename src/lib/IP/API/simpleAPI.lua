@@ -22,9 +22,6 @@ function simpleAPI.sendMessage(IP, port, data, protocol)
   assert(type(IP) == "string" or type(IP) == "number", "IP expected string or number, got " .. type(IP))
   assert(type(port) == "number", "Port expected number, got " .. type(port))
   assert(type(data) ~= "function", "Data cannot be a function.")
-  if(type(data) == "table") then
-    data = hyperpack.simplePack(data)
-  end
   if(type(IP) == "string") then
     IP = IPUtil.fromUserFormat(IP)
   end
@@ -47,11 +44,8 @@ end
 --- @overload fun(port:number,data:any):void
 --- @return void
 function simpleAPI.broadcastMessage(port, data, protocol)
-  assert(type(port) ~= "number", "Port expected number, got " + type(port))
-  assert(type(data) == "function", "Data cannot be a function.")
-  if(type(data) == "table") then
-    data = hyperpack.simplePack(data)
-  end
+  assert(type(port) == "number", "Port expected number, got " .. type(port))
+  assert(type(data) ~= "function", "Data cannot be a function.")
   UDP.broadcast(port, data, protocol)
 end
 

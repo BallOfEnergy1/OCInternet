@@ -21,7 +21,12 @@ function udp.UDPListen(port, callback)
       local tempPacket = Packet:new():copyFrom(message)
       tempPacket.udpProto = packer:popValue()
       tempPacket.udpLength = packer:popValue()
-      tempPacket.data = packer:popValue()
+      tempPacket.data = packer:popRemaining()
+      if(#tempPacket.data == 1) then
+        tempPacket.data = tempPacket.data[1]
+      elseif(#tempPacket.data == 0) then
+        tempPacket.data = nil
+      end
       callback(tempPacket, receiverMAC)
     end
   end
@@ -46,7 +51,12 @@ function udp.pullUDP(port, timeout, callback)
     local tempPacket = Packet:new():copyFrom(packet)
     tempPacket.udpProto = packer:popValue()
     tempPacket.udpLength = packer:popValue()
-    tempPacket.data = packer:popValue()
+    tempPacket.data = packer:popRemaining()
+    if(#tempPacket.data == 1) then
+      tempPacket.data = tempPacket.data[1]
+    elseif(#tempPacket.data == 0) then
+      tempPacket.data = nil
+    end
     if(not callback) then
       return tempPacket
     end
@@ -58,7 +68,7 @@ function udp.send(IP, port, payload, protocol, MAC, senderAddress)
   local packer = hyperPack:new()
   packer:pushValue(protocol or 0) -- If 0, just assume some user-defined program has taken the reigns and go with it; separate by ports.
   packer:pushValue(#serialization.serialize(payload)) -- TODO: Change to hyperpack for length det.
-  packer:pushValue(payload)
+  packer:pushValue(payload or "")
   local data = packer:serialize()
   local packet = Packet:new(senderAddress or _G.ROUTE and _G.ROUTE.routeModem.MAC or _G.IP.primaryModem.MAC, udpProtocol, IP, port, data, MAC)
   multiport.send(packet)
