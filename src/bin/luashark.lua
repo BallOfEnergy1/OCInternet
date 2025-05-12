@@ -236,11 +236,52 @@ local function inferInfoFromPacket(packet)
       return "DHCP Response", 0xCCFFFF
     end
   elseif(protocol == "TCP") then
-    return "", 0xCCFFC0
+    local tcpFlags = packer:popValue()
+    local tcpAckNum = packer:popValue()
+    local tcpSeqNum = packer:popValue()
+    local sentData = packer:popValue()
+    local toSend = ""
+    local color = 0xCCB6FF
+    if(tcpFlags == 0x00) then -- Data
+      local length = #hyperPack.simplePack(sentData)
+      toSend = packet.header.senderPort .. " → " .. packet.header.targetPort .. " Seq=" .. tcpSeqNum .. " Ack=" .. tcpAckNum .. " Len=" .. length
+    else
+      local type = ""
+      -- 0          0          0          0
+      -- 2^3 = FIN, 2^2 = SYN, 2^1 = RST, 2^0 = ACK
+      if(tcpFlags == 0x1) then
+        type = "ACK"
+      elseif(tcpFlags == 0x2) then
+        type = "RST"
+        color = 0xCC4000
+      elseif(tcpFlags == 0x3) then
+        type = "RST, ACK"
+        color = 0xCC4000
+      elseif(tcpFlags == 0x4) then
+        type = "SYN"
+        color = 0x888888
+      elseif(tcpFlags == 0x5) then
+        type = "SYN, ACK"
+        color = 0x888888
+      elseif(tcpFlags == 0x8) then
+        type = "FIN"
+        color = 0x888888
+      elseif(tcpFlags == 0x9) then
+        type = "FIN, ACK"
+        color = 0x888888
+      end
+      local length = #hyperPack.simplePack(sentData)
+      toSend = packet.header.senderPort .. " → " .. packet.header.targetPort .. " [" .. type .. "] Seq=" .. tcpSeqNum .. " Ack=" .. tcpAckNum .. " Len=" .. length
+    end
+    if(packet.header.targetPort == 80) then
+      return toSend, 0xCCFFC0
+    else
+      return toSend, color
+    end
   elseif(protocol == "Unk.") then
-    return "", 0x992400
+    return "", 0xCC4000
   end
-  return "Unk; protocol: " .. tostring(protocol), 0x992400
+  return "Unk; protocol: " .. tostring(protocol), 0xCC4000
 end
 
 local function drawInterfaceScreen()
@@ -314,7 +355,6 @@ local function onNetworkEvent(message, time, MAC, dist)
 end
 
 local function onNetworkSent(message, time, MAC)
-  _G.IP.logger.write(MAC .. " " .. selectedInterface)
   updateNetworkIndicator(message.header.targetMAC, message.header.senderMAC)
   if(selectedInterface ~= MAC) then return end
   if(status == 1 and (selectedInterface == message.header.senderMAC or message.header.senderMAC == _G.IP.constants.broadcastMAC) and capturing) then -- TODO: Change to hyperpack!
