@@ -142,7 +142,6 @@ elseif(number == 1) then
   writeTextCentered(4, "2. Lightweight install.")
   writeTextCentered(5, "3. Server install")
   writeTextCentered(6, "4. Router install")
-  writeTextCentered(7, "5. Advanced install")
   writeTextCentered(15, "0. Return to previous page")
   gpu.bitblt(0, (resX / 2) - windowX / 2 + 1, (resY / 2) - windowY / 2 + 1)
   ::Stage2_1_1::

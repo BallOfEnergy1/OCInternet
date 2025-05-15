@@ -2,7 +2,6 @@
 local serialization = require("serialization")
 
 local assets = {
-  "/etc/OCIP",
   "/lib/IP",
   "/lib/button.lua",
   "/lib/hyperpack.lua",
@@ -10,6 +9,12 @@ local assets = {
   "/lib/tableutil.lua",
   "/lib/crc32.lua",
   "/lib/tableutil.lua",
+  "/lib/auto_progress.lua",
+  "/lib/oczlib.lua",
+  "/lib/lualzw.lua",
+  "/usr/man/tar.man",
+  "/bin/tar.lua",
+  "/bin/ocz.lua",
   "/bin/arp.lua",
   "/bin/dns.lua",
   "/bin/ftp.lua",
